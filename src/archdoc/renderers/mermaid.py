@@ -1,0 +1,423 @@
+"""Mermaid diagram generation for ArchDoc.
+
+Produces:
+1. High-Level Bounded Context Architecture Map (clean, executive-level).
+2. Per-domain end-to-end trace diagrams (Routes -> Use Cases -> Services -> Storage & Events).
+3. Localized Use Case execution flows.
+4. Localized Domain Event lifecycle and batching flows.
+5. End-to-end business sequence diagrams.
+"""
+
+from archdoc.core.ir import (
+    ArchitectureGraph,
+    ChannelType,
+    DomainEventNode,
+    EdgeType,
+    ProcessFlow,
+    UseCaseNode,
+)
+
+
+def generate_event_flowchart(event: DomainEventNode, graph: ArchitectureGraph) -> str:
+    """Generate localized Mermaid flowchart for a single Domain Event lifecycle."""
+    producers = graph.get_producers_for_event(event.id)
+    handlers = graph.get_handlers_for_event(event.id)
+
+    lines = [
+        "flowchart LR",
+    ]
+
+    # Subgraph Producers
+    lines.append("    subgraph Producers [\"🚀 Emitted By\"]")
+    if producers:
+        for s in producers:
+            lines.append(f"        {_node_safe_id(s.id)}[\"{s.name}\"]")
+    else:
+        lines.append(f"        P_UN[\"{_escape_mermaid('External / Unknown')}\"]")
+    lines.append("    end\n")
+
+    # Subgraph Event & Channels
+    lines.append("    subgraph EventTransport [\"⚡ Event & Buffers\"]")
+    ev_safe = _node_safe_id(event.id)
+    lines.append(f"        {ev_safe}[\"📦 {event.name}\"]")
+
+    channel_ids = list(dict.fromkeys([
+        e.target_id
+        for e in graph.edges
+        if e.source_id == event.id and e.edge_type == EdgeType.ROUTED_THROUGH
+    ]))
+    for ch_id in channel_ids:
+        ch = graph.find_node(ch_id)
+        if ch:
+            ch_safe = _node_safe_id(ch.id)
+            if ch.channel_type == ChannelType.REDIS_BATCH:
+                cfg = ch.configuration
+                w = cfg.get("window_seconds", 30)
+                m = cfg.get("max_batch_size", 25)
+                lines.append(f"        {ch_safe}[\"Буфер Redis<br/><i>{w}с / макс {m}</i>\"]")
+            else:
+                lines.append(f"        {ch_safe}[\"{ch.name}\"]")
+    lines.append("    end\n")
+
+    # Subgraph Consumers
+    lines.append("    subgraph Consumers [\"🎯 Handlers\"]")
+    if handlers:
+        for h in handlers:
+            h_safe = _node_safe_id(h.id)
+            batch_label = "<br/><i>Batch Handler</i>" if h.is_batch else ""
+            lines.append(f"        {h_safe}[\"{h.name}{batch_label}\"]")
+    else:
+        lines.append(f"        H_NONE[\"{_escape_mermaid('No active listeners')}\"]")
+    lines.append("    end\n")
+
+    # Flow Edges
+    added_edges: set[str] = set()
+
+    def add_flow_edge(src: str, dst: str, lbl: str) -> None:
+        edge_key = f"{src}->{dst}"
+        if edge_key not in added_edges:
+            added_edges.add(edge_key)
+            lines.append(f"    {src} -->|{lbl}| {dst}")
+
+    if producers:
+        for s in producers:
+            add_flow_edge(_node_safe_id(s.id), ev_safe, "publish")
+    else:
+        add_flow_edge("P_UN", ev_safe, "publish")
+
+    for h in handlers:
+        h_safe = _node_safe_id(h.id)
+        if h.is_batch:
+            chan_id = f"channel.redis_batch.{h.name}"
+            ch_safe = _node_safe_id(chan_id)
+            add_flow_edge(ev_safe, ch_safe, "buffer")
+            add_flow_edge(ch_safe, h_safe, "flush batch")
+        else:
+            add_flow_edge(ev_safe, h_safe, "dispatch")
+
+    # CSS classes
+    lines.extend([
+        "",
+        "    classDef service fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;",
+        "    classDef event fill:#fff3e0,stroke:#f57c00,stroke-width:2px;",
+        "    classDef handler fill:#f1f8e9,stroke:#689f38,stroke-width:2px;",
+        "    classDef channel fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;",
+        f"    class {ev_safe} event;",
+    ])
+    if producers:
+        lines.append(f"    class {','.join(_node_safe_id(s.id) for s in producers)} service;")
+    if handlers:
+        lines.append(f"    class {','.join(_node_safe_id(h.id) for h in handlers)} handler;")
+
+    return "\n".join(lines)
+
+
+def generate_use_case_flowchart(uc: UseCaseNode, graph: ArchitectureGraph) -> str:
+    """Generate localized Mermaid flowchart for an individual application Use Case."""
+    lines = ["flowchart LR"]
+    uc_safe = _node_safe_id(uc.id)
+
+    # 1. Triggers (HTTP Routes)
+    routes = graph.get_entrypoints_for_use_case(uc.id)
+    if routes:
+        lines.append("    subgraph Triggers [\"🌐 Entrypoints\"]")
+        for r in routes:
+            r_safe = _node_safe_id(r.id)
+            lines.append(f"        {r_safe}[\"{r.name}\"]")
+        lines.append("    end\n")
+
+    # 2. Use Case
+    lines.append(f"    subgraph Workflow [\"🎬 Use Case\"]\n        {uc_safe}[\"{uc.name}\"]\n    end\n")
+
+    # 3. Services
+    services = [e.target_id for e in graph.edges if e.source_id == uc.id and e.edge_type == EdgeType.ORCHESTRATES]
+    if services:
+        lines.append("    subgraph DomainServices [\"🚀 Domain Services\"]")
+        for sid in services:
+            snode = graph.find_node(sid)
+            if snode:
+                lines.append(f"        {_node_safe_id(sid)}[\"{snode.name}\"]")
+        lines.append("    end\n")
+
+    # 4. Storage Entities
+    reads, writes = graph.get_storage_for_node(uc.id)
+    # Also include storage from called services
+    for sid in services:
+        s_reads, s_writes = graph.get_storage_for_node(sid)
+        reads.extend(s_reads)
+        writes.extend(s_writes)
+    reads = list({st.id: st for st in reads}.values())
+    writes = list({st.id: st for st in writes}.values())
+    all_storage = list({st.id: st for st in (reads + writes)}.values())
+
+    if reads or writes:
+        lines.append("    subgraph Persistence [\"💾 Storage / DB\"]")
+        for st in all_storage:
+            lines.append(f"        {_node_safe_id(st.id)}[(\"{st.name}\")]")
+        lines.append("    end\n")
+
+    # 5. Published Events
+    published_events_map: dict[str, DomainEventNode] = {}
+    for sid in [uc.id] + services:
+        ev_ids = [e.target_id for e in graph.edges if e.source_id == sid and e.edge_type == EdgeType.PUBLISHES]
+        for eid in ev_ids:
+            ev = graph.find_event(eid)
+            if ev and ev.id not in published_events_map:
+                published_events_map[ev.id] = ev
+    published_events = list(published_events_map.values())
+
+    if published_events:
+        lines.append("    subgraph EventsEmitted [\"📦 Emitted Events\"]")
+        for ev in published_events:
+            lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {ev.name}\"]")
+        lines.append("    end\n")
+
+    # Connect nodes
+    if routes:
+        for r in routes:
+            lines.append(f"    {_node_safe_id(r.id)} -->|triggers| {uc_safe}")
+
+    if services:
+        for sid in services:
+            lines.append(f"    {uc_safe} -->|orchestrates| {_node_safe_id(sid)}")
+            for st in writes:
+                lines.append(f"    {_node_safe_id(sid)} -.->|writes| {_node_safe_id(st.id)}")
+            for st in reads:
+                lines.append(f"    {_node_safe_id(sid)} -.->|reads| {_node_safe_id(st.id)}")
+            for ev in published_events:
+                lines.append(f"    {_node_safe_id(sid)} -->|publishes| {_node_safe_id(ev.id)}")
+    else:
+        for st in writes:
+            lines.append(f"    {uc_safe} -.->|persists via UoW| {_node_safe_id(st.id)}")
+        for st in reads:
+            lines.append(f"    {uc_safe} -.->|reads via UoW| {_node_safe_id(st.id)}")
+        for ev in published_events:
+            lines.append(f"    {uc_safe} -->|publishes| {_node_safe_id(ev.id)}")
+
+    lines.extend([
+        "",
+        "    classDef entrypoint fill:#e0f2f1,stroke:#00897b,stroke-width:2px;",
+        "    classDef uc fill:#fce4ec,stroke:#c2185b,stroke-width:2px;",
+        "    classDef service fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;",
+        "    classDef storage fill:#ede7f6,stroke:#512da8,stroke-width:2px;",
+        "    classDef event fill:#fff3e0,stroke:#f57c00,stroke-width:2px;",
+        f"    class {uc_safe} uc;",
+    ])
+    if routes:
+        lines.append(f"    class {','.join(_node_safe_id(r.id) for r in routes)} entrypoint;")
+    if services:
+        lines.append(f"    class {','.join(_node_safe_id(s) for s in services)} service;")
+
+    return "\n".join(lines)
+
+
+def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
+    """Generate end-to-end architecture diagram for a single bounded context."""
+    domain_lower = domain.lower()
+    routes = [r for r in graph.entrypoints if r.domain == domain_lower]
+    use_cases = [u for u in graph.use_cases if u.domain == domain_lower]
+    services = [s for s in graph.services if s.domain == domain_lower or domain_lower in s.name.lower()]
+    events = [e for e in graph.events if e.domain == domain_lower or domain_lower in e.name.lower()]
+    storage = [st for st in graph.storage_entities if st.domain == domain_lower or domain_lower in st.name.lower()]
+
+    lines = [
+        "flowchart LR",
+    ]
+
+    if routes:
+        lines.append("    subgraph Routes [\"🌐 API Endpoints\"]")
+        for r in routes[:8]:
+            lines.append(f"        {_node_safe_id(r.id)}[\"{r.name}\"]")
+        lines.append("    end\n")
+
+    if use_cases:
+        lines.append("    subgraph Workflows [\"🎬 Use Cases\"]")
+        for u in use_cases[:8]:
+            lines.append(f"        {_node_safe_id(u.id)}[\"{u.name}\"]")
+        lines.append("    end\n")
+
+    if services:
+        lines.append("    subgraph Svc [\"🚀 Domain Services\"]")
+        for s in services[:4]:
+            lines.append(f"        {_node_safe_id(s.id)}[\"{s.name}\"]")
+        lines.append("    end\n")
+
+    if storage:
+        lines.append("    subgraph DB [\"💾 Database Tables\"]")
+        for st in storage[:6]:
+            lines.append(f"        {_node_safe_id(st.id)}[(\"{st.name}\")]")
+        lines.append("    end\n")
+
+    if events:
+        lines.append("    subgraph Ev [\"📦 Domain Events\"]")
+        for ev in events[:8]:
+            lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {ev.name}\"]")
+        lines.append("    end\n")
+
+    # Connect
+    added_edges: set[str] = set()
+
+    def add_edge(src: str, dst: str, lbl: str = "") -> None:
+        key = f"{src}->{dst}"
+        if key not in added_edges:
+            added_edges.add(key)
+            if lbl:
+                lines.append(f"    {src} -->|{lbl}| {dst}")
+            else:
+                lines.append(f"    {src} --> {dst}")
+
+    for r in routes[:8]:
+        for ucid in r.target_use_case_ids:
+            if any(u.id == ucid for u in use_cases[:8]):
+                add_edge(_node_safe_id(r.id), _node_safe_id(ucid))
+
+    for u in use_cases[:8]:
+        for e in graph.edges:
+            if e.source_id == u.id and e.edge_type == EdgeType.ORCHESTRATES and any(s.id == e.target_id for s in services[:4]):
+                add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id))
+            elif e.source_id == u.id and e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage[:6]):
+                add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "persists")
+
+    for s in services[:4]:
+        for e in graph.edges:
+            if e.source_id == s.id and e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage[:6]):
+                add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "persists")
+            elif e.source_id == s.id and e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events[:8]):
+                add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "publishes")
+
+    lines.extend([
+        "",
+        "    classDef entrypoint fill:#e0f2f1,stroke:#00897b,stroke-width:2px;",
+        "    classDef uc fill:#fce4ec,stroke:#c2185b,stroke-width:2px;",
+        "    classDef service fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;",
+        "    classDef storage fill:#ede7f6,stroke:#512da8,stroke-width:2px;",
+        "    classDef event fill:#fff3e0,stroke:#f57c00,stroke-width:2px;",
+    ])
+    return "\n".join(lines)
+
+
+def generate_system_overview(graph: ArchitectureGraph) -> str:
+    """Generate high-level Bounded Context Architecture Map.
+
+    Displays executive-level domain boundaries, synchronous REST/CLI entrypoints,
+    core services & persistence, and asynchronous event bus / Redis buffer interactions.
+    """
+    lines = [
+        "flowchart TB",
+        "    subgraph Ingress [\"🌐 Ingress & Client Entrypoints\"]",
+        "        API[\"⚡ FastAPI REST Services\"]",
+        "        WORKER[\"⚙️ Taskiq Background Workers\"]",
+        "    end\n",
+        "    subgraph Contexts [\"🏰 Domain Bounded Contexts\"]",
+    ]
+
+    # Discover main business domains
+    discovered_domains = [d for d in graph.get_domains() if d not in ("general", "base", "core", "application")]
+    if not discovered_domains:
+        discovered_domains = ["booking", "order", "listing", "event", "storage", "ticket"]
+
+    # Select top 6 domains for clean overview
+    primary_domains = discovered_domains[:6]
+
+    for domain in primary_domains:
+        d_name = domain.capitalize()
+        d_routes = [r for r in graph.entrypoints if r.domain == domain]
+        d_ucs = [u for u in graph.use_cases if u.domain == domain]
+        d_tables = [t for t in graph.storage_entities if t.domain == domain or domain in t.name.lower()]
+
+        lines.append(f"        subgraph Ctx_{domain} [\"{d_name} Context\"]")
+        lines.append("            direction TB")
+        lines.append(f"            {domain}_api[\"🌐 /{domain}s Endpoints ({len(d_routes)})\"]")
+        lines.append(f"            {domain}_uc[\"🎬 {d_name} Workflows ({len(d_ucs)})\"]")
+        tbl_names = ", ".join(t.name for t in d_tables[:2]) if d_tables else f"{domain} DB"
+        lines.append(f"            {domain}_db[(\"💾 {tbl_names}\")]")
+        lines.append(f"            {domain}_api --> {domain}_uc --> {domain}_db")
+        lines.append("        end\n")
+
+    lines.append("    end\n")
+
+    # Messaging Infrastructure
+    lines.extend([
+        "    subgraph Transport [\"⚡ Async Messaging & Batching Infrastructure\"]",
+        "        BUS[\"InMemory EventBus\"]",
+        "        REDIS[\"Redis Batch Buffers (Sliding Window & Metrics)\"]",
+        "        HANDLERS[\"🎯 Async Handlers & ClickHouse Sync\"]",
+        "        BUS --> REDIS --> HANDLERS",
+        "    end\n",
+        "    API ==> Contexts",
+        "    WORKER ==> Transport\n",
+    ])
+
+    # Inter-domain event connections
+    for domain in primary_domains:
+        d_events = [e for e in graph.events if e.domain == domain or domain in e.name.lower()]
+        if d_events:
+            lines.append(f"    Ctx_{domain} -.->|{len(d_events)} Events| BUS")
+
+    lines.extend([
+        "    HANDLERS -.->|async sync| Contexts",
+        "",
+        "    classDef ctx fill:#f8f9fa,stroke:#455a64,stroke-width:2px;",
+        "    classDef transport fill:#ede7f6,stroke:#512da8,stroke-width:2px;",
+        "    classDef ingress fill:#e0f2f1,stroke:#00897b,stroke-width:2px;",
+        "    class Ingress ingress;",
+        "    class Transport transport;",
+        "    class Contexts ctx;",
+    ])
+
+    return "\n".join(lines)
+
+
+def generate_flow_sequence_diagram(flow: ProcessFlow, graph: ArchitectureGraph) -> str:
+    """Generate Mermaid sequence diagram for end-to-end business flow."""
+    lines = [
+        "sequenceDiagram",
+        "    autonumber",
+        "    participant Service as 🚀 Domain Service",
+        "    participant Bus as ⚡ Event Bus",
+        "    participant Redis as 🔄 Redis Batch Buffer",
+        "    participant Handler as 🎯 Event Handler",
+        "    participant DB as 💾 Database / Storage",
+    ]
+
+    for ev_id in flow.event_ids:
+        ev = graph.find_event(ev_id)
+        if not ev:
+            continue
+
+        producers = graph.get_producers_for_event(ev.id)
+        prod_name = producers[0].name if producers else "DomainService"
+        handlers = graph.get_handlers_for_event(ev.id)
+
+        lines.append(f"    Note over Service,DB: {ev.name}")
+        lines.append(f"    Service->>Bus: {prod_name}.publish({ev.name})")
+
+        has_batch = any(h.is_batch for h in handlers)
+        if has_batch:
+            lines.append("    Bus->>Redis: accumulate_batch(event, window=30s)")
+            lines.append("    Redis-->>Handler: flush_batch(events)")
+        else:
+            lines.append("    Bus->>Handler: dispatch(event)")
+
+        for h in handlers:
+            lines.append(f"    Handler->>DB: execute({h.name})")
+
+    return "\n".join(lines)
+
+
+def _node_safe_id(raw_id: str) -> str:
+    """Convert an arbitrary string ID into a valid Mermaid node identifier."""
+    return (
+        raw_id.replace(".", "_")
+        .replace(":", "_")
+        .replace("/", "_")
+        .replace("-", "_")
+        .replace(" ", "_")
+        .replace("{", "_")
+        .replace("}", "_")
+        .replace("@", "_")
+    )
+
+
+def _escape_mermaid(text: str) -> str:
+    return text.replace('"', "'").replace("[[", "").replace("]]", "")
