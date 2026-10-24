@@ -16,6 +16,7 @@ from typing import Any
 
 from archdoc.config.schema import ArchDocConfig
 from archdoc.core.docstring import clean_summary
+from archdoc.core.domain import infer_domain_from_path, is_ignored_path
 from archdoc.core.ir import SourceLocation
 
 
@@ -143,16 +144,8 @@ class CodebaseAstVisitor(ast.NodeVisitor):
         self._current_service_methods: list[str] = []
 
     def _infer_domain(self, file_path: str) -> str:
-        """Infer domain name from file path."""
-        p = Path(file_path)
-        stem = p.stem.lower()
-        if stem not in ("__init__", "base", "service", "handler", "router", "routes", "views"):
-            return stem
-        # Look at parent folder name
-        parent = p.parent.name.lower()
-        if parent not in ("routes", "handlers", "services", "use_cases", "v1", "api"):
-            return parent
-        return "general"
+        """Infer canonical domain name from file path."""
+        return infer_domain_from_path(file_path)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         old_class = self.current_class
@@ -218,6 +211,15 @@ class CodebaseAstVisitor(ast.NodeVisitor):
         self.current_func_invocations = []
         self.current_func_repos = []
         self.current_func_publishes = []
+
+        # Track typed service parameters (e.g. password_service: PasswordService)
+        for arg in node.args.args + node.args.kwonlyargs:
+            if arg.annotation:
+                ann_name = self._resolve_call_func_name(arg.annotation)
+                if ann_name and "service" in ann_name.lower():
+                    clean_sym = ann_name.split(".")[-1]
+                    self.local_var_types[arg.arg] = clean_sym
+                    self.current_func_invocations.append(clean_sym)
 
         if self.current_class and not node.name.startswith("_"):
             self._current_service_methods.append(node.name)
@@ -367,7 +369,16 @@ class CodebaseAstVisitor(ast.NodeVisitor):
 
         # 2. General invocation tracking
         if func_name:
-            self.current_func_invocations.append(func_name)
+            parts = func_name.split(".", 1)
+            if len(parts) > 1 and parts[0] in self.local_var_types:
+                mapped_name = f"{self.local_var_types[parts[0]]}.{parts[1]}"
+                self.current_func_invocations.append(mapped_name)
+                self.current_func_invocations.append(self.local_var_types[parts[0]])
+            elif len(parts) == 1 and parts[0] in self.local_var_types:
+                self.current_func_invocations.append(self.local_var_types[parts[0]])
+            else:
+                self.current_func_invocations.append(func_name)
+
             if any(k in func_name.lower() for k in ("repo", "repository")):
                 clean_r = func_name.split(".")[0]
                 if clean_r not in self.current_func_repos:
@@ -420,7 +431,7 @@ class CodebaseAstVisitor(ast.NodeVisitor):
             elif isinstance(arg, ast.Name):
                 if arg.id in self.local_var_types:
                     events.append(self.local_var_types[arg.id].split(".")[-1])
-            elif isinstance(arg, ast.List):
+            elif isinstance(arg, (ast.List, ast.Tuple, ast.Set)):
                 for elem in arg.elts:
                     if isinstance(elem, ast.Call):
                         name = self._resolve_call_func_name(elem.func)
@@ -458,8 +469,12 @@ class CodebaseAstVisitor(ast.NodeVisitor):
             dec_parts = dec_name.split(".")
             last_part = dec_parts[-1].lower()
 
-            # 1. Detect HTTP Route: @router.post(""), @router.get("/search"), @app.get(...)
-            if any(dec_name.startswith(p) for p in ("router.", "api_router.", "app.")) and last_part in self.config.http_route_decorators:
+            # 1. Detect HTTP Route: @router.post(""), @auth_router.get("/search"), @app.get(...)
+            is_route_dec = (
+                any(r in dec_name.lower() for r in ("router", "app", "api", "endpoint"))
+                and last_part in self.config.http_route_decorators
+            )
+            if is_route_dec:
                 http_method = last_part.upper()
                 route_path = ""
                 if args and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str):
@@ -502,15 +517,20 @@ class CodebaseAstVisitor(ast.NodeVisitor):
 def scan_directory_ast(target_dir: str | Path, config: ArchDocConfig) -> AstScanResult:
     """Recursively scan Python files in target_dir and aggregate AST results."""
     result = AstScanResult()
-    root = Path(target_dir)
+    root = Path(target_dir).resolve()
 
     for py_file in root.rglob("*.py"):
-        if any(ignored in py_file.parts for ignored in (".venv", "__pycache__", ".git", ".mypy_cache")):
+        if is_ignored_path(py_file):
             continue
         try:
+            rel_path = str(py_file.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            rel_path = str(py_file).replace("\\", "/")
+
+        try:
             source = py_file.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(py_file))
-            visitor = CodebaseAstVisitor(file_path=str(py_file), config=config)
+            tree = ast.parse(source, filename=rel_path)
+            visitor = CodebaseAstVisitor(file_path=rel_path, config=config)
             visitor.visit(tree)
 
             result.entrypoints.extend(visitor.entrypoints)

@@ -8,6 +8,8 @@ Produces:
 5. End-to-end business sequence diagrams.
 """
 
+import re
+
 from archdoc.core.ir import (
     ArchitectureGraph,
     ChannelType,
@@ -213,12 +215,12 @@ def generate_use_case_flowchart(uc: UseCaseNode, graph: ArchitectureGraph) -> st
 
 def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
     """Generate end-to-end architecture diagram for a single bounded context."""
-    domain_lower = domain.lower()
-    routes = [r for r in graph.entrypoints if r.domain == domain_lower]
-    use_cases = [u for u in graph.use_cases if u.domain == domain_lower]
-    services = [s for s in graph.services if s.domain == domain_lower or domain_lower in s.name.lower()]
-    events = [e for e in graph.events if e.domain == domain_lower or domain_lower in e.name.lower()]
-    storage = [st for st in graph.storage_entities if st.domain == domain_lower or domain_lower in st.name.lower()]
+    comps = graph.get_domain_components(domain)
+    routes = comps["entrypoints"]
+    use_cases = comps["use_cases"]
+    services = comps["services"]
+    storage = comps["storage"]
+    events = comps["events"]
 
     lines = [
         "flowchart LR",
@@ -226,35 +228,35 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
 
     if routes:
         lines.append("    subgraph Routes [\"🌐 API Endpoints\"]")
-        for r in routes[:8]:
-            lines.append(f"        {_node_safe_id(r.id)}[\"{r.name}\"]")
+        for r in routes[:10]:
+            lines.append(f"        {_node_safe_id(r.id)}[\"{_escape_mermaid(r.name)}\"]")
         lines.append("    end\n")
 
     if use_cases:
         lines.append("    subgraph Workflows [\"🎬 Use Cases\"]")
-        for u in use_cases[:8]:
-            lines.append(f"        {_node_safe_id(u.id)}[\"{u.name}\"]")
+        for u in use_cases[:10]:
+            lines.append(f"        {_node_safe_id(u.id)}[\"{_escape_mermaid(u.name)}\"]")
         lines.append("    end\n")
 
     if services:
         lines.append("    subgraph Svc [\"🚀 Domain Services\"]")
-        for s in services[:4]:
-            lines.append(f"        {_node_safe_id(s.id)}[\"{s.name}\"]")
+        for s in services[:6]:
+            lines.append(f"        {_node_safe_id(s.id)}[\"{_escape_mermaid(s.name)}\"]")
         lines.append("    end\n")
 
     if storage:
-        lines.append("    subgraph DB [\"💾 Database Tables\"]")
-        for st in storage[:6]:
-            lines.append(f"        {_node_safe_id(st.id)}[(\"{st.name}\")]")
+        lines.append("    subgraph DB [\"💾 Storage & Tables\"]")
+        for st in storage[:8]:
+            lines.append(f"        {_node_safe_id(st.id)}[(\"{_escape_mermaid(st.name)}\")]")
         lines.append("    end\n")
 
     if events:
         lines.append("    subgraph Ev [\"📦 Domain Events\"]")
         for ev in events[:8]:
-            lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {ev.name}\"]")
+            lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {_escape_mermaid(ev.name)}\"]")
         lines.append("    end\n")
 
-    # Connect
+    # Connect nodes via real graph edges
     added_edges: set[str] = set()
 
     def add_edge(src: str, dst: str, lbl: str = "") -> None:
@@ -266,24 +268,38 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
             else:
                 lines.append(f"    {src} --> {dst}")
 
-    for r in routes[:8]:
+    # 1. Routes -> Use Cases / Services
+    for r in routes[:10]:
         for ucid in r.target_use_case_ids:
-            if any(u.id == ucid for u in use_cases[:8]):
-                add_edge(_node_safe_id(r.id), _node_safe_id(ucid))
+            if any(u.id == ucid for u in use_cases):
+                add_edge(_node_safe_id(r.id), _node_safe_id(ucid), "triggers")
+        for sid in r.target_service_ids:
+            if any(s.id == sid for s in services):
+                add_edge(_node_safe_id(r.id), _node_safe_id(sid), "calls")
 
-    for u in use_cases[:8]:
+    # 2. Use Cases -> Services, Storage, Events
+    for u in use_cases[:10]:
         for e in graph.edges:
-            if e.source_id == u.id and e.edge_type == EdgeType.ORCHESTRATES and any(s.id == e.target_id for s in services[:4]):
-                add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id))
-            elif e.source_id == u.id and e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage[:6]):
-                add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "persists")
+            if e.source_id == u.id:
+                if e.edge_type == EdgeType.ORCHESTRATES and any(s.id == e.target_id for s in services):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "orchestrates")
+                elif e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "persists")
+                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in storage):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "reads")
+                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "publishes")
 
-    for s in services[:4]:
+    # 3. Services -> Storage, Events
+    for s in services[:6]:
         for e in graph.edges:
-            if e.source_id == s.id and e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage[:6]):
-                add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "persists")
-            elif e.source_id == s.id and e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events[:8]):
-                add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "publishes")
+            if e.source_id == s.id:
+                if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "persists")
+                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in storage):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "reads")
+                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "publishes")
 
     lines.extend([
         "",
@@ -297,41 +313,48 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
 
 
 def generate_system_overview(graph: ArchitectureGraph) -> str:
-    """Generate high-level Bounded Context Architecture Map.
+    """Generate high-level Bounded Context Architecture Map with full system topology."""
+    from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
 
-    Displays executive-level domain boundaries, synchronous REST/CLI entrypoints,
-    core services & persistence, and asynchronous event bus / Redis buffer interactions.
-    """
     lines = [
         "flowchart TB",
         "    subgraph Ingress [\"🌐 Ingress & Client Entrypoints\"]",
-        "        API[\"⚡ FastAPI REST Services\"]",
-        "        WORKER[\"⚙️ Taskiq Background Workers\"]",
+        f"        API[\"⚡ FastAPI REST Services ({len(graph.entrypoints)} routes)\"]",
+        "        WORKER[\"⚙️ Taskiq Background Workers & Schedulers\"]",
         "    end\n",
         "    subgraph Contexts [\"🏰 Domain Bounded Contexts\"]",
     ]
 
-    # Discover main business domains
-    discovered_domains = [d for d in graph.get_domains() if d not in ("general", "base", "core", "application")]
+    discovered_domains = graph.get_domains()
     if not discovered_domains:
-        discovered_domains = ["booking", "order", "listing", "event", "storage", "ticket"]
+        discovered_domains = ["auth", "booking", "ticket", "order", "listing", "event", "notification", "storage", "dashboard"]
 
-    # Select top 6 domains for clean overview
-    primary_domains = discovered_domains[:6]
-
-    for domain in primary_domains:
+    for domain in discovered_domains:
         d_name = domain.capitalize()
-        d_routes = [r for r in graph.entrypoints if r.domain == domain]
-        d_ucs = [u for u in graph.use_cases if u.domain == domain]
-        d_tables = [t for t in graph.storage_entities if t.domain == domain or domain in t.name.lower()]
+        d_title = DOMAIN_DISPLAY_TITLES.get(domain, d_name)
+        comps = graph.get_domain_components(domain)
+        d_routes = comps["entrypoints"]
+        d_ucs = comps["use_cases"]
+        d_services = comps["services"]
+        d_tables = comps["storage"]
+        d_events = comps["events"]
 
+        details = []
+        if d_routes:
+            details.append(f"Routes: {len(d_routes)}")
+        if d_ucs:
+            details.append(f"Workflows: {len(d_ucs)}")
+        if d_services:
+            details.append(f"Services: {len(d_services)}")
+        if d_tables:
+            tbl_preview = ", ".join(t.name for t in d_tables[:2])
+            details.append(f"Tables: {tbl_preview}")
+        if d_events:
+            details.append(f"Events: {len(d_events)}")
+
+        summary_text = "<br/>".join(details) if details else "Domain logic"
         lines.append(f"        subgraph Ctx_{domain} [\"{d_name} Context\"]")
-        lines.append("            direction TB")
-        lines.append(f"            {domain}_api[\"🌐 /{domain}s Endpoints ({len(d_routes)})\"]")
-        lines.append(f"            {domain}_uc[\"🎬 {d_name} Workflows ({len(d_ucs)})\"]")
-        tbl_names = ", ".join(t.name for t in d_tables[:2]) if d_tables else f"{domain} DB"
-        lines.append(f"            {domain}_db[(\"💾 {tbl_names}\")]")
-        lines.append(f"            {domain}_api --> {domain}_uc --> {domain}_db")
+        lines.append(f"            node_{domain}[\"<b>{d_title}</b><br/>{summary_text}\"]")
         lines.append("        end\n")
 
     lines.append("    end\n")
@@ -339,30 +362,53 @@ def generate_system_overview(graph: ArchitectureGraph) -> str:
     # Messaging Infrastructure
     lines.extend([
         "    subgraph Transport [\"⚡ Async Messaging & Batching Infrastructure\"]",
-        "        BUS[\"InMemory EventBus\"]",
-        "        REDIS[\"Redis Batch Buffers (Sliding Window & Metrics)\"]",
-        "        HANDLERS[\"🎯 Async Handlers & ClickHouse Sync\"]",
-        "        BUS --> REDIS --> HANDLERS",
+        "        BUS[\"InMemory EventBus (Domain Events Dispatcher)\"]",
+        "        REDIS_BUF[\"Redis Batch Buffers (Sliding Window: 30s / 25 items)\"]",
+        "        HANDLERS[\"🎯 Async Event Handlers & Analytics Sync\"]",
+        "        BUS --> REDIS_BUF --> HANDLERS",
         "    end\n",
-        "    API ==> Contexts",
-        "    WORKER ==> Transport\n",
+        "    subgraph DataTier [\"💾 Unified Persistence Tier\"]",
+        "        DB_PG[(\"PostgreSQL (ACID Relational Core)\")]",
+        "        DB_REDIS[(\"Redis (Token Blacklist & Buffers)\")]",
+        "        DB_CH[(\"ClickHouse (Analytical Event Log)\")]",
+        "    end\n",
     ])
 
-    # Inter-domain event connections
-    for domain in primary_domains:
-        d_events = [e for e in graph.events if e.domain == domain or domain in e.name.lower()]
-        if d_events:
-            lines.append(f"    Ctx_{domain} -.->|{len(d_events)} Events| BUS")
+    # Connect Ingress to Contexts
+    for domain in discovered_domains:
+        comps = graph.get_domain_components(domain)
+        if comps["entrypoints"]:
+            lines.append(f"    API --> Ctx_{domain}")
+
+    lines.append("    WORKER ==> Transport\n")
+
+    # Domain -> EventBus publications
+    for domain in discovered_domains:
+        comps = graph.get_domain_components(domain)
+        if comps["events"]:
+            lines.append(f"    Ctx_{domain} -.->|{len(comps['events'])} events| BUS")
+
+    # Key cross-domain business flows
+    if "booking" in discovered_domains and "ticket" in discovered_domains:
+        lines.append("    Ctx_booking -.->|allocates inventory| Ctx_ticket")
+    if "order" in discovered_domains and "ticket" in discovered_domains:
+        lines.append("    Ctx_order -.->|fulfills items| Ctx_ticket")
 
     lines.extend([
-        "    HANDLERS -.->|async sync| Contexts",
+        "    HANDLERS -.->|batch sync| DB_CH",
+        "    HANDLERS -.->|async updates| DB_PG",
+        "    Contexts --> DB_PG",
+        "    Ctx_auth --> DB_REDIS",
+        "    Transport --> DB_REDIS",
         "",
         "    classDef ctx fill:#f8f9fa,stroke:#455a64,stroke-width:2px;",
         "    classDef transport fill:#ede7f6,stroke:#512da8,stroke-width:2px;",
         "    classDef ingress fill:#e0f2f1,stroke:#00897b,stroke-width:2px;",
+        "    classDef datatier fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;",
         "    class Ingress ingress;",
         "    class Transport transport;",
         "    class Contexts ctx;",
+        "    class DataTier datatier;",
     ])
 
     return "\n".join(lines)
@@ -407,16 +453,10 @@ def generate_flow_sequence_diagram(flow: ProcessFlow, graph: ArchitectureGraph) 
 
 def _node_safe_id(raw_id: str) -> str:
     """Convert an arbitrary string ID into a valid Mermaid node identifier."""
-    return (
-        raw_id.replace(".", "_")
-        .replace(":", "_")
-        .replace("/", "_")
-        .replace("-", "_")
-        .replace(" ", "_")
-        .replace("{", "_")
-        .replace("}", "_")
-        .replace("@", "_")
-    )
+    clean = re.sub(r"[^a-zA-Z0-9_]", "_", raw_id)
+    if clean and clean[0].isdigit():
+        clean = f"n_{clean}"
+    return clean or "node"
 
 
 def _escape_mermaid(text: str) -> str:

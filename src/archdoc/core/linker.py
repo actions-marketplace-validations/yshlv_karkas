@@ -5,6 +5,7 @@ from typing import Any
 
 from archdoc.config.schema import ArchDocConfig
 from archdoc.core.docstring import clean_summary
+from archdoc.core.domain import normalize_domain_name
 from archdoc.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
@@ -33,7 +34,7 @@ class ArchitectureLinker:
     def link(self, ast_data: AstScanResult, runtime_data: dict[str, Any]) -> ArchitectureGraph:
         graph = ArchitectureGraph(
             project_name=self.config.project_name,
-            project_root=self.config.project_root,
+            project_root=".",
         )
 
         entrypoint_map: dict[str, EntrypointNode] = {}
@@ -59,15 +60,19 @@ class ArchitectureLinker:
         )
         channel_map[taskiq_channel.id] = taskiq_channel
 
-        # 2. Storage Entities (SQLAlchemy Tables & Redis Buffer)
         for tbl in runtime_data.get("tables", []):
+            tbl_name = tbl["name"]
+            domain_name = normalize_domain_name(tbl_name)
+            if domain_name == tbl_name and "_" in tbl_name:
+                domain_name = normalize_domain_name(tbl_name.split("_")[0])
+
             storage_node = StorageEntityNode(
                 id=tbl["id"],
-                name=tbl["name"],
+                name=tbl_name,
                 engine=tbl.get("engine", "postgresql"),
-                table_or_key=tbl.get("table_or_key", tbl["name"]),
+                table_or_key=tbl.get("table_or_key", tbl_name),
                 columns_or_fields=tbl.get("columns_or_fields", []),
-                domain=tbl["name"].split("_")[0],
+                domain=domain_name,
             )
             storage_map[storage_node.name] = storage_node
 
@@ -77,7 +82,7 @@ class ArchitectureLinker:
             name="redis_batch_buffer",
             engine="redis",
             table_or_key="events:buffer:{handler_id}:{group_key}",
-            domain="events",
+            domain="notification",
             columns_or_fields=[
                 {"name": "score", "type": "timestamp (float)", "primary_key": False, "nullable": False},
                 {"name": "member", "type": "JSON serialized event payload", "primary_key": True, "nullable": False},
@@ -190,7 +195,21 @@ class ArchitectureLinker:
             # Link Use Case -> Service
             for s_call in auc.orchestrated_services:
                 matched_service = self._match_service(s_call, list(service_map.values()))
+                if not matched_service:
+                    s_name = s_call.split(".")[-1]
+                    if "service" in s_name.lower():
+                        matched_service = ServiceNode(
+                            id=f"service.{s_name}",
+                            name=s_name,
+                            domain=auc.domain,
+                            summary=f"Domain service for {s_name} operations.",
+                        )
+                        service_map[s_name] = matched_service
+
                 if matched_service:
+                    if matched_service.domain in ("general", "services", ""):
+                        matched_service.domain = auc.domain
+
                     edge = ArchitectureEdge(
                         source_id=uc_node.id,
                         target_id=matched_service.id,
@@ -502,6 +521,14 @@ class ArchitectureLinker:
         flows = self._build_process_flows(list(event_map.values()), list(service_map.values()), graph.edges)
         graph.flows = flows
 
+        # Normalize domains for all nodes
+        for s in service_map.values():
+            s.domain = normalize_domain_name(s.domain)
+        for e in event_map.values():
+            e.domain = normalize_domain_name(e.domain)
+        for h in handler_map.values():
+            h.domain = normalize_domain_name(h.domain)
+
         # Populate final graph (deduplicate use_cases by id)
         graph.entrypoints = sorted(entrypoint_map.values(), key=lambda x: x.name)
         unique_ucs = {uc.id: uc for uc in use_case_map.values()}
@@ -526,18 +553,53 @@ class ArchitectureLinker:
         if not clean:
             return None
 
+        # Direct canonical entity aliases
+        if clean in ("user", "users"):
+            for t in tables:
+                if t.name == "users":
+                    return t
+        if clean in ("usersession", "usersessions"):
+            for t in tables:
+                if t.name == "user_sessions":
+                    return t
+        if clean in ("tokencache", "token", "tokens"):
+            for t in tables:
+                if "redis" in t.name or "session" in t.name:
+                    return t
+
+        # 1. Exact or standard plural match
         for t in tables:
             t_clean = t.name.replace("_", "").lower()
-            if clean == t_clean or clean in t_clean or t_clean in clean or f"{clean}s" == t_clean:
+            if clean == t_clean or f"{clean}s" == t_clean or f"{clean}es" == t_clean:
+                return t
+
+        # 2. Singular stem match
+        clean_stem = clean.rstrip("s")
+        for t in tables:
+            t_stem = t.name.replace("_", "").lower().rstrip("s")
+            if clean_stem == t_stem:
+                return t
+
+        # 3. Substring match fallback
+        for t in tables:
+            t_clean = t.name.replace("_", "").lower()
+            if clean in t_clean or t_clean in clean:
                 return t
         return None
 
     def _match_service(self, call_expr: str, services: list[ServiceNode]) -> ServiceNode | None:
         """Match invocation expression like booking_service.create to ServiceNode."""
+        call_clean = call_expr.split(".")[-1].lower()
+        # 1. Exact match on service name
+        for s in services:
+            if s.name.lower() == call_clean:
+                return s
+
+        # 2. Substring core match
         call_lower = call_expr.lower()
         for s in services:
             s_core = s.name.lower().replace("service", "")
-            if s_core and s_core in call_lower:
+            if s_core and (s_core in call_clean or s_core in call_lower):
                 return s
         return None
 

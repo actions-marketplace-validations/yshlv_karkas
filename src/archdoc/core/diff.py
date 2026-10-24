@@ -84,7 +84,7 @@ def diff_graphs(base: ArchitectureGraph, head: ArchitectureGraph) -> DiffReport:
                 )
             )
 
-    # 2. Check Handlers
+    # 2. Check Handlers & Orphaned Events
     base_handlers = {h.name: h for h in base.handlers}
     head_handlers = {h.name: h for h in head.handlers}
 
@@ -96,6 +96,34 @@ def diff_graphs(base: ArchitectureGraph, head: ArchitectureGraph) -> DiffReport:
                     component_type="handler",
                     component_id=name,
                     message=f"Handler `{name}` was removed.",
+                )
+            )
+
+    # Check for newly orphaned events (events with consumers in base that lost all consumers in head)
+    for name in head_events:
+        base_h = base.get_handlers_for_event(name) if name in base_events else []
+        head_h = head.get_handlers_for_event(name)
+        if base_h and not head_h:
+            report.items.append(
+                ChangeItem(
+                    level=ChangeLevel.WARNING,
+                    component_type="event",
+                    component_id=name,
+                    message=f"Domain event `{name}` no longer has any active consumers/handlers.",
+                )
+            )
+
+    # 3. Check Removed Entrypoints (API Routes)
+    base_routes = {ep.name: ep for ep in base.entrypoints}
+    head_routes = {ep.name: ep for ep in head.entrypoints}
+    for name in base_routes:
+        if name not in head_routes:
+            report.items.append(
+                ChangeItem(
+                    level=ChangeLevel.WARNING,
+                    component_type="entrypoint",
+                    component_id=name,
+                    message=f"API Entrypoint `{name}` was removed.",
                 )
             )
 

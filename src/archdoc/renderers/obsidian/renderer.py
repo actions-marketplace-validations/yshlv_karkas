@@ -1,6 +1,5 @@
-"""Obsidian Vault markdown generator with Mermaid diagrams and wikilinks."""
-
 import json
+import re
 from pathlib import Path
 
 from archdoc.core.docstring import format_docstring_markdown
@@ -45,40 +44,68 @@ class ObsidianVaultRenderer:
             d.mkdir(parents=True, exist_ok=True)
 
         # 1. Render Entrypoints
+        valid_ep = {f"{_safe_filename(ep.name)}.md" for ep in graph.entrypoints}
+        self._prune_stale_files(entrypoints_dir, valid_ep)
         for ep in graph.entrypoints:
             safe_fname = _safe_filename(ep.name)
             self._render_entrypoint(ep, graph, entrypoints_dir / f"{safe_fname}.md")
 
         # 2. Render Use Cases
+        valid_uc = {f"{uc.name}.md" for uc in graph.use_cases}
+        self._prune_stale_files(use_cases_dir, valid_uc)
         for uc in graph.use_cases:
             self._render_use_case(uc, graph, use_cases_dir / f"{uc.name}.md")
 
         # 3. Render Services
+        valid_svc = {f"{s.name}.md" for s in graph.services}
+        self._prune_stale_files(services_dir, valid_svc)
         for s in graph.services:
             self._render_service(s, graph, services_dir / f"{s.name}.md")
 
         # 4. Render Events
+        valid_ev = {f"{ev.name}.md" for ev in graph.events}
+        self._prune_stale_files(events_dir, valid_ev)
         for ev in graph.events:
             self._render_event(ev, graph, events_dir / f"{ev.name}.md")
 
         # 5. Render Handlers
+        valid_h = {f"{h.name}.md" for h in graph.handlers}
+        self._prune_stale_files(handlers_dir, valid_h)
         for h in graph.handlers:
             self._render_handler(h, graph, handlers_dir / f"{h.name}.md")
 
         # 6. Render Storage
+        valid_st = {f"{st.name}.md" for st in graph.storage_entities}
+        self._prune_stale_files(storage_dir, valid_st)
         for st in graph.storage_entities:
             self._render_storage(st, graph, storage_dir / f"{st.name}.md")
 
         # 7. Render Flows
+        valid_fl = {f"{fl.name}.md" for fl in graph.flows}
+        self._prune_stale_files(flows_dir, valid_fl)
         for fl in graph.flows:
             self._render_flow(fl, graph, flows_dir / f"{fl.name}.md")
 
         # 8. Render Domains
-        for dom in graph.get_domains():
+        valid_domains = set(graph.get_domains())
+        valid_dom = {f"{dom}.md" for dom in valid_domains}
+        self._prune_stale_files(domains_dir, valid_dom)
+        for dom in valid_domains:
             self._render_domain(dom, graph, domains_dir / f"{dom}.md")
 
         # 9. Render Index (MOC)
         self._render_index(graph, self.output_dir / "index.md")
+
+    def _prune_stale_files(self, directory: Path, valid_filenames: set[str]) -> None:
+        """Remove any markdown files in directory not present in valid_filenames."""
+        if not directory.exists():
+            return
+        for f in directory.glob("*.md"):
+            if f.name not in valid_filenames:
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
 
     def _render_entrypoint(self, ep: EntrypointNode, graph: ArchitectureGraph, path: Path) -> None:
         lines = [
@@ -101,7 +128,7 @@ class ObsidianVaultRenderer:
             lines.append("")
 
         if ep.location:
-            lines.append(f"📁 **Location:** `{ep.location.file_path}:{ep.location.start_line}`\n")
+            lines.append(f"📁 **Location:** `{ep.location.display(graph.project_root)}`\n")
 
         lines.extend([
             "---",
@@ -176,7 +203,7 @@ class ObsidianVaultRenderer:
             lines.append("")
 
         if uc.location:
-            lines.append(f"📁 **Location:** `{uc.location.file_path}:{uc.location.start_line}`\n")
+            lines.append(f"📁 **Location:** `{uc.location.display(graph.project_root)}`\n")
 
         lines.extend([
             "---",
@@ -271,7 +298,7 @@ class ObsidianVaultRenderer:
             lines.append("")
 
         if ev.location:
-            lines.append(f"📁 **Location:** `{ev.location.file_path}:{ev.location.start_line}`\n")
+            lines.append(f"📁 **Location:** `{ev.location.display(graph.project_root)}`\n")
 
         lines.extend([
             "---",
@@ -348,6 +375,9 @@ class ObsidianVaultRenderer:
             lines.append(format_docstring_markdown(s.docstring))
             lines.append("")
 
+        if s.location:
+            lines.append(f"📁 **Location:** `{s.location.display(graph.project_root)}`\n")
+
         lines.extend([
             "## 💾 Persistence Operations",
             "",
@@ -410,6 +440,9 @@ class ObsidianVaultRenderer:
         if h.docstring:
             lines.append(format_docstring_markdown(h.docstring))
             lines.append("")
+
+        if h.location:
+            lines.append(f"📁 **Location:** `{h.location.display(graph.project_root)}`\n")
 
         if h.is_batch and h.batch_config:
             w = h.batch_config.get("window_seconds", 30)
@@ -485,24 +518,28 @@ class ObsidianVaultRenderer:
         path.write_text("\n".join(lines), encoding="utf-8")
 
     def _render_domain(self, domain: str, graph: ArchitectureGraph, path: Path) -> None:
+        from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
+
+        dom_title = DOMAIN_DISPLAY_TITLES.get(domain, domain.capitalize())
         dom_diagram = generate_domain_diagram(domain, graph)
-        domain_lower = domain.lower()
-        d_routes = [r for r in graph.entrypoints if r.domain == domain_lower]
-        d_ucs = [u for u in graph.use_cases if u.domain == domain_lower]
-        d_services = [s for s in graph.services if s.domain == domain_lower or domain_lower in s.name.lower()]
-        d_events = [e for e in graph.events if e.domain == domain_lower or domain_lower in e.name.lower()]
-        d_storage = [t for t in graph.storage_entities if t.domain == domain_lower or domain_lower in t.name.lower()]
+        comps = graph.get_domain_components(domain)
+
+        d_routes = comps["entrypoints"]
+        d_ucs = comps["use_cases"]
+        d_services = comps["services"]
+        d_storage = comps["storage"]
+        d_events = comps["events"]
 
         lines = [
             "---",
             "type: domain_context",
-            f"name: {domain.capitalize()}",
+            f"name: {dom_title}",
             "tags:",
             "  - architecture/domain",
-            f"  - domain/{domain_lower}",
+            f"  - domain/{domain.lower()}",
             "---",
             "",
-            f"# 🏰 {domain.capitalize()} Domain Architecture",
+            f"# 🏰 {dom_title} Domain Architecture",
             "",
             "## 🔄 End-to-End Domain Architecture Flow",
             "",
@@ -624,9 +661,24 @@ class ObsidianVaultRenderer:
             "## 🏰 Domain Bounded Contexts",
             "",
         ]
+        from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
+
         for dom in graph.get_domains():
-            d_name = dom.capitalize()
-            lines.append(f"- 🏰 [[{dom}|{d_name} Domain Architecture]]")
+            d_title = DOMAIN_DISPLAY_TITLES.get(dom, dom.capitalize())
+            comps = graph.get_domain_components(dom)
+            stat_parts = []
+            if comps["entrypoints"]:
+                stat_parts.append(f"{len(comps['entrypoints'])} routes")
+            if comps["use_cases"]:
+                stat_parts.append(f"{len(comps['use_cases'])} workflows")
+            if comps["services"]:
+                stat_parts.append(f"{len(comps['services'])} services")
+            if comps["storage"]:
+                stat_parts.append(f"{len(comps['storage'])} tables")
+            if comps["events"]:
+                stat_parts.append(f"{len(comps['events'])} events")
+            stat_str = f" *({', '.join(stat_parts)})*" if stat_parts else ""
+            lines.append(f"- 🏰 [[{dom}|**{d_title}**]]{stat_str}")
 
         lines.extend([
             "",
@@ -697,12 +749,8 @@ class ObsidianVaultRenderer:
 
 
 def _safe_filename(name: str) -> str:
-    """Format string for clean cross-platform filename."""
-    return (
-        name.replace(" ", "_")
-        .replace("/", "_")
-        .replace(":", "_")
-        .replace("{", "")
-        .replace("}", "")
-        .strip("_")
-    )
+    """Format string for clean cross-platform filename without forbidden characters."""
+    clean = re.sub(r'[<>:"/\\|?*]', '_', name)
+    clean = clean.replace("{", "").replace("}", "").replace(" ", "_")
+    clean = re.sub(r'_+', '_', clean).strip("_")
+    return clean or "unnamed"

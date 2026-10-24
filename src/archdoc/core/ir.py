@@ -67,6 +67,21 @@ class SourceLocation(BaseModel):
     end_line: int | None = None
     symbol_name: str | None = None
 
+    def display(self, project_root: str | None = None) -> str:
+        """Return relative path with forward slashes for clean portable documentation."""
+        p = self.file_path.replace("\\", "/")
+        if project_root:
+            norm_root = project_root.replace("\\", "/").rstrip("/")
+            if p.lower().startswith(norm_root.lower()):
+                p = p[len(norm_root):].lstrip("/")
+        # Safety fallback: if absolute drive letter remains, isolate relative src path
+        if ":" in p:
+            if "/src/" in p:
+                p = p[p.index("/src/") + 1:]
+            elif p.startswith(("C:/", "D:/", "E:/")):
+                p = p[3:].lstrip("/")
+        return f"{p}:{self.start_line}"
+
 
 class EventField(BaseModel):
     """Specification of an individual field within a domain event payload."""
@@ -197,7 +212,7 @@ class ArchitectureGraph(BaseModel):
 
     version: str = "2.0.0"
     project_name: str
-    project_root: str
+    project_root: str = "."
     generated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     entrypoints: list[EntrypointNode] = Field(default_factory=list)
@@ -291,11 +306,76 @@ class ArchitectureGraph(BaseModel):
         writes = [s for s in self.storage_entities if s.id in write_ids]
         return reads, writes
 
+    def get_domain_components(self, domain: str) -> dict[str, list[Any]]:
+        """Return all entrypoints, use cases, services, storage entities, and events associated with a domain.
+
+        A node is associated if its domain matches, OR if it participates directly in workflows of this domain.
+        """
+        domain_lower = domain.lower()
+
+        # Primary use cases
+        ucs = [u for u in self.use_cases if u.domain == domain_lower]
+        uc_ids = {u.id for u in ucs}
+
+        # Routes that trigger use cases in this domain, or have this domain
+        routes = [
+            r for r in self.entrypoints
+            if r.domain == domain_lower or any(ucid in uc_ids for ucid in r.target_use_case_ids)
+        ]
+
+        # Services orchestrated by this domain's use cases, or belonging to domain
+        orchestrated_service_ids = {
+            e.target_id for e in self.edges
+            if e.source_id in uc_ids and e.edge_type == EdgeType.ORCHESTRATES
+        }
+        services = [
+            s for s in self.services
+            if s.domain == domain_lower or s.id in orchestrated_service_ids or domain_lower in s.name.lower()
+        ]
+        service_ids = {s.id for s in services}
+
+        # Storage entities accessed by this domain's use cases or services, or belonging to domain
+        active_ids = uc_ids | service_ids
+        storage_ids = {
+            e.target_id for e in self.edges
+            if e.source_id in active_ids and e.edge_type in (EdgeType.WRITES_TO, EdgeType.READS_FROM)
+        }
+        storage = [
+            st for st in self.storage_entities
+            if st.domain == domain_lower or st.id in storage_ids or domain_lower in st.name.lower()
+        ]
+
+        # Events emitted by this domain's use cases or services, or belonging to domain
+        emitted_event_ids = {
+            e.target_id for e in self.edges
+            if e.source_id in active_ids and e.edge_type == EdgeType.PUBLISHES
+        }
+        events = [
+            ev for ev in self.events
+            if ev.domain == domain_lower or ev.id in emitted_event_ids or domain_lower in ev.name.lower()
+        ]
+
+        return {
+            "entrypoints": sorted(routes, key=lambda x: x.name),
+            "use_cases": sorted(ucs, key=lambda x: x.name),
+            "services": sorted(services, key=lambda x: x.name),
+            "storage": sorted(storage, key=lambda x: x.name),
+            "events": sorted(events, key=lambda x: x.name),
+        }
+
     def get_domains(self) -> list[str]:
-        """Return unique sorted domain names discovered across nodes."""
-        domains: set[str] = set()
+        """Return valid business bounded contexts (excluding empty or utility domains)."""
+        candidate_domains: set[str] = set()
         for col in (self.use_cases, self.events, self.services, self.entrypoints, self.storage_entities):
             for item in col:
-                if getattr(item, "domain", None):
-                    domains.add(item.domain)
-        return sorted(domains)
+                d = getattr(item, "domain", None)
+                if d and d not in ("general", "base", "core", "application", "shared", "infrastructure"):
+                    candidate_domains.add(d)
+
+        valid_domains = []
+        for d in sorted(candidate_domains):
+            comps = self.get_domain_components(d)
+            if comps["use_cases"] or (comps["entrypoints"] and comps["storage"]):
+                valid_domains.append(d)
+
+        return valid_domains

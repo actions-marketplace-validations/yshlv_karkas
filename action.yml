@@ -1,0 +1,38 @@
+name: "ArchDoc - Architecture Contract & Docs Action"
+description: "Scan Python backend architectures, generate Obsidian docs, and validate PR contract breaking changes."
+author: "ArchDoc Contributors"
+branding:
+  icon: "layers"
+  color: "purple"
+
+inputs:
+  command:
+    description: "ArchDoc command to run ('generate', 'diff', or 'check')"
+    required: false
+    default: "check"
+  args:
+    description: "Arguments to pass to the command (e.g. '.' or 'base.json head.json --fail-on-breaking')"
+    required: false
+    default: "."
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.12"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+
+    - name: Run ArchDoc
+      shell: bash
+      run: |
+        uvx archdoc ${{ inputs.command }} ${{ inputs.args }}

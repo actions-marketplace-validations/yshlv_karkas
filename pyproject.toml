@@ -3,6 +3,32 @@ name = "archdoc"
 version = "0.1.0"
 description = "Live Architecture Documentation & Contract Validator for Python Backends"
 readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "ArchDoc Contributors" }
+]
+keywords = [
+    "architecture",
+    "documentation",
+    "fastapi",
+    "clean-architecture",
+    "obsidian",
+    "pydantic",
+    "static-analysis",
+    "ddd",
+    "contract-testing",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.10.0",
@@ -12,6 +38,12 @@ dependencies = [
     "rich>=13.0.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/wecandevelopit/archdoc"
+Repository = "https://github.com/wecandevelopit/archdoc"
+Documentation = "https://github.com/wecandevelopit/archdoc#readme"
+Issues = "https://github.com/wecandevelopit/archdoc/issues"
 
 [dependency-groups]
 dev = [

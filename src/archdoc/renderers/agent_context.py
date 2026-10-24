@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from archdoc.core.ir import ArchitectureGraph, EdgeType
+from archdoc.core.ir import ArchitectureGraph, EdgeType, EntrypointNode
 
 
 def render_agent_context_markdown(graph: ArchitectureGraph, output_file: str | Path) -> None:
@@ -16,7 +16,8 @@ def render_agent_context_markdown(graph: ArchitectureGraph, output_file: str | P
         "> Authoritative architectural contracts, top-down entrypoint call graphs, and event flow topology. Keep this context in mind when writing or modifying services, event handlers, and database models.",
         "",
         "## 1. System Topology Overview",
-        f"- **Project Root:** `{graph.project_root}`",
+        f"- **Project Name:** `{graph.project_name}`",
+        "- **Project Root:** `.`",
         f"- **API Routes & Entrypoints:** {len(graph.entrypoints)}",
         f"- **Application Use Cases:** {len(graph.use_cases)}",
         f"- **Domain Services:** {len(graph.services)}",
@@ -24,22 +25,26 @@ def render_agent_context_markdown(graph: ArchitectureGraph, output_file: str | P
         f"- **Event Handlers & Background Tasks:** {len(graph.handlers)}",
         f"- **Storage Entities & Tables:** {len(graph.storage_entities)}",
         "",
-        "## 2. API Entrypoints & Workflows (Top-Down)",
+        "## 2. API Entrypoints & Workflows (by Domain)",
         "",
     ]
 
-    for ep in graph.entrypoints[:25]:
-        target_ucs = []
-        for ucid in ep.target_use_case_ids:
-            uc = graph.find_node(ucid)
-            if uc:
-                target_ucs.append(f"`{uc.name}()`")
-        uc_str = f" -> invokes {', '.join(target_ucs)}" if target_ucs else ""
-        summary_str = f": {ep.summary}" if ep.summary else ""
-        lines.append(f"- **`{ep.name}`**{uc_str}{summary_str}")
+    domains_with_eps: dict[str, list[EntrypointNode]] = {}
+    for ep in graph.entrypoints:
+        domains_with_eps.setdefault(ep.domain or "general", []).append(ep)
 
-    if len(graph.entrypoints) > 25:
-        lines.append(f"- *...and {len(graph.entrypoints) - 25} more routes.*")
+    for dom, eps in sorted(domains_with_eps.items()):
+        lines.append(f"### {dom.capitalize()} Endpoints ({len(eps)})")
+        for ep in sorted(eps, key=lambda x: x.name):
+            target_ucs = []
+            for ucid in ep.target_use_case_ids:
+                uc = graph.find_node(ucid)
+                if uc:
+                    target_ucs.append(f"`{uc.name}()`")
+            uc_str = f" -> invokes {', '.join(target_ucs)}" if target_ucs else ""
+            summary_str = f": {ep.summary}" if ep.summary else ""
+            lines.append(f"- **`{ep.name}`**{uc_str}{summary_str}")
+        lines.append("")
 
     lines.extend([
         "",

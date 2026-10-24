@@ -66,7 +66,18 @@ def generate(
     agent_file: Annotated[str | None, typer.Option("--agent", "-a", help="Target AI agent context markdown file")] = None,
     ir_file: Annotated[str | None, typer.Option("--ir", help="Target Architecture Graph JSON file")] = None,
 ) -> None:
-    """Scan project, build architecture graph, and generate documentation for Obsidian & AI Agents."""
+    """Scan a Python backend project, build the architecture graph, and generate documentation.
+
+    Outputs produced:
+    1. Obsidian Vault: Structured markdown notes with [[wikilinks]], metadata tags, and Mermaid diagrams.
+    2. AI Agent Context: Token-optimized architecture_context.md for LLM pair programmers.
+    3. Architecture IR: Machine-readable architecture_graph.json for CI/CD diffing.
+
+    Examples:
+      archdoc generate .
+      archdoc generate ./my-backend --obsidian ./docs/architecture
+      archdoc generate . -o ./docs/vault -a ./docs/agent_context.md --ir ./docs/arch_graph.json
+    """
     root = Path(path).resolve()
     if not root.exists():
         console.print(f"[bold red]Error:[/bold red] Path `{root}` does not exist.")
@@ -112,11 +123,19 @@ def generate(
 
 @app.command()
 def diff(
-    base: Annotated[str, typer.Argument(help="Path to base architecture_graph.json (e.g. from main)")],
+    base: Annotated[str, typer.Argument(help="Path to base architecture_graph.json (e.g. from main branch)")],
     head: Annotated[str, typer.Argument(help="Path to head architecture_graph.json or current project dir")],
     fail_on_breaking: Annotated[bool, typer.Option("--fail-on-breaking", help="Exit with code 1 if breaking changes exist")] = True,
 ) -> None:
-    """Compare two architecture snapshots and detect breaking contract changes."""
+    """Compare two architecture snapshots and detect breaking contract changes in CI/CD.
+
+    Validates Pydantic v2 schemas for domain events, detects removed fields, type mutations,
+    and missing consumer event handlers.
+
+    Examples:
+      archdoc diff base_graph.json head_graph.json
+      archdoc diff main_graph.json . --fail-on-breaking
+    """
     base_path = Path(base)
     if not base_path.exists():
         console.print(f"[bold red]Error:[/bold red] Base file `{base}` not found.")
@@ -142,7 +161,12 @@ def diff(
 def check(
     path: Annotated[str, typer.Argument(help="Path to project root directory")] = ".",
 ) -> None:
-    """Verify that architecture contracts are consistent and valid."""
+    """Fast sanity check verifying that architecture contracts, events, and handlers are valid.
+
+    Examples:
+      archdoc check .
+      archdoc check /path/to/project
+    """
     root = Path(path).resolve()
     graph = _build_graph_for_project(root)
     console.print(f"[bold green]Check passed:[/bold green] Discovered {len(graph.events)} valid domain events and {len(graph.handlers)} handlers.")
