@@ -1,7 +1,7 @@
-"""ArchTopo: Live Architecture Topology & Contract Validator."""
+"""Karkas: Live Architecture Skeleton & Contract Validator."""
 
-from archtopo.cli import app
-from archtopo.core.ir import (
+from karkas.cli import app
+from karkas.core.ir import (
     ArchitectureGraph,
     DomainEventNode,
     HandlerNode,

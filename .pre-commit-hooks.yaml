@@ -1,15 +1,15 @@
-- id: archtopo-check
-  name: archtopo-check
+- id: karkas-check
+  name: karkas-check
   description: Validate architecture contracts, event schemas, and handler registrations
-  entry: archtopo check
+  entry: karkas check
   language: python
   types: [python]
   pass_filenames: false
 
-- id: archtopo-generate
-  name: archtopo-generate
-  description: Regenerate Obsidian architecture documentation and AI agent snapshot
-  entry: archtopo generate
+- id: karkas-generate
+  name: karkas-generate
+  description: Regenerate Obsidian architecture skeleton documentation and AI agent snapshot
+  entry: karkas generate
   language: python
   types: [python]
   pass_filenames: false

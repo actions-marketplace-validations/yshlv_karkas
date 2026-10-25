@@ -1,4 +1,4 @@
-"""Mermaid diagram generation for ArchTopo.
+"""Mermaid diagram generation for Karkas.
 
 Produces:
 1. High-Level Bounded Context Architecture Map (clean, executive-level).
@@ -10,7 +10,7 @@ Produces:
 
 import re
 
-from archtopo.core.ir import (
+from karkas.core.ir import (
     ArchitectureGraph,
     ChannelType,
     DomainEventNode,
@@ -314,7 +314,7 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
 
 def generate_system_overview(graph: ArchitectureGraph) -> str:
     """Generate high-level Bounded Context Architecture Map with full system topology."""
-    from archtopo.core.domain import DOMAIN_DISPLAY_TITLES
+    from karkas.core.domain import DOMAIN_DISPLAY_TITLES
 
     lines = [
         "flowchart TB",

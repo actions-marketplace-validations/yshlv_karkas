@@ -1,7 +1,7 @@
-"""Unit tests for ArchTopo breaking changes diff engine."""
+"""Unit tests for Karkas breaking changes diff engine."""
 
-from archtopo.core.diff import ChangeLevel, diff_graphs
-from archtopo.core.ir import ArchitectureGraph, DomainEventNode, EventField
+from karkas.core.diff import ChangeLevel, diff_graphs
+from karkas.core.ir import ArchitectureGraph, DomainEventNode, EventField
 
 
 def test_diff_detects_breaking_and_compatible_changes() -> None:
@@ -67,4 +67,4 @@ def test_diff_detects_breaking_and_compatible_changes() -> None:
 
     report_type = diff_graphs(base, head_type_change)
     assert report_type.has_breaking_changes is True
-    assert any("type changed" in i.message for i in report_type.items)
+    assert any("changed from" in i.message for i in report_type.items)

@@ -1,6 +1,6 @@
-"""Unit tests for ArchTopo IR models."""
+"""Unit tests for Karkas IR models."""
 
-from archtopo.core.ir import (
+from karkas.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
     DomainEventNode,

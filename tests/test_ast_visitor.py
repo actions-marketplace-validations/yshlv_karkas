@@ -1,10 +1,10 @@
-"""Unit tests for ArchTopo AST visitor and docstring utilities."""
+"""Unit tests for Karkas AST visitor and docstring utilities."""
 
 from pathlib import Path
 
-from archtopo.config.schema import ArchTopoConfig
-from archtopo.core.docstring import clean_summary, format_docstring_markdown
-from archtopo.extractors.ast_visitor import scan_directory_ast
+from karkas.config.schema import KarkasConfig
+from karkas.core.docstring import clean_summary, format_docstring_markdown
+from karkas.extractors.ast_visitor import scan_directory_ast
 
 
 def test_ast_visitor_detects_publish_and_handlers(tmp_path: Path) -> None:
@@ -39,7 +39,7 @@ async def handle_cancelled(event):
     (tmp_path / "service.py").write_text(service_code, encoding="utf-8")
     (tmp_path / "handler.py").write_text(handler_code, encoding="utf-8")
 
-    config = ArchTopoConfig(project_root=str(tmp_path))
+    config = KarkasConfig(project_root=str(tmp_path))
     result = scan_directory_ast(tmp_path, config)
 
     # Verify publishers
@@ -99,7 +99,7 @@ async def create_booking(payload):
     routes_file.write_text(routes_code, encoding="utf-8")
     uc_file.write_text(use_case_code, encoding="utf-8")
 
-    config = ArchTopoConfig(project_root=str(tmp_path))
+    config = KarkasConfig(project_root=str(tmp_path))
     result = scan_directory_ast(tmp_path, config)
 
     # Verify entrypoints

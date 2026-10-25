@@ -1,17 +1,17 @@
-# 🏛️ ArchTopo
+# 🏛️ Karkas
 
-**Live Architecture Topology & Contract Validator for Python Backends.**
+**Live Architecture Skeleton & Contract Validator for Python Backends.**
 
-[![PyPI Version](https://img.shields.io/pypi/v/archtopo.svg?color=blue)](https://pypi.org/project/archtopo/)
-[![CI](https://github.com/yshlv/archtopo/actions/workflows/ci.yml/badge.svg)](https://github.com/yshlv/archtopo/actions/workflows/ci.yml)
+[![PyPI Version](https://img.shields.io/pypi/v/karkas.svg?color=blue)](https://pypi.org/project/karkas/)
+[![CI](https://github.com/yshlv/karkas/actions/workflows/ci.yml/badge.svg)](https://github.com/yshlv/karkas/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Obsidian Ready](https://img.shields.io/badge/obsidian-vault-purple.svg)](https://obsidian.md/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-`archtopo` bridges the gap between fast-moving backend codebases and living technical documentation. It eliminates stale Confluence pages, manual Lucidchart diagrams, and unreadable AST import graphs.
+`karkas` reconstructs the **real execution skeleton** of your async Python backend. It eliminates stale Confluence documentation, manual Lucidchart diagrams, and unreadable AST import webs.
 
-Instead, `archtopo` reconstructs the **real execution topology** of your async backend:
+Instead, `karkas` reveals the true skeletal structure of your application from the top down:
 - 🌐 **Ingress Entrypoints:** FastAPI routes, CLI commands, and Taskiq/Celery background workers.
 - 🎬 **Application Workflows (Use Cases):** Step-by-step orchestrations, service invocations, and Unit of Work persistence.
 - 🚀 **Domain Services & Ports:** Business logic, external integrations, and database operations.
@@ -20,9 +20,9 @@ Instead, `archtopo` reconstructs the **real execution topology** of your async b
 
 ---
 
-## 🗺️ Live Architecture Topology
+## 🗺️ Live Architecture Skeleton
 
-`archtopo` traces code top-down—from API entrypoints all the way down to database writes and distributed events:
+`karkas` traces code top-down—from API entrypoints all the way down to database writes and distributed events:
 
 ```mermaid
 flowchart LR
@@ -79,7 +79,7 @@ flowchart LR
                     │ Python Backend Codebase│
                     └───────────┬────────────┘
                                 │
-                        [ archtopo scan ]
+                         [ karkas scan ]
                                 │
          ┌──────────────────────┼──────────────────────┐
          ▼                                             ▼
@@ -144,10 +144,10 @@ When opening the generated documentation folder in [Obsidian](https://obsidian.m
 
 ### 2. Rich CLI Execution
 
-Run `archtopo generate .` in your terminal to view interactive scanning progress and a detailed summary table:
+Run `karkas generate .` in your terminal to view interactive scanning progress and a detailed summary table:
 
 ```
-╭─────────────────────────────── ArchTopo Analysis ─────────────────────────────╮
+╭─────────────────────────────── Karkas Analysis ───────────────────────────────╮
 │ Project: InventX Backend  •  Python: 3.12.10  •  Roots: src/                  │
 ╰───────────────────────────────────────────────────────────────────────────────╯
  Scanning source files: ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:01
@@ -171,7 +171,7 @@ Run `archtopo generate .` in your terminal to view interactive scanning progress
 
 ### 3. CI/CD Contract Guard (Pull Request Diff)
 
-Prevent silent schema breaks between frontend and backend, or producer and consumer services. `archtopo diff` flags breaking contract changes before merging:
+Prevent silent schema breaks between frontend and backend, or producer and consumer services. `karkas diff` flags breaking contract changes before merging:
 
 ```
 🚨 ARCHITECTURE CONTRACT VIOLATION DETECTED
@@ -195,33 +195,33 @@ Process exited with code 1.
 Install via `uv` (recommended):
 
 ```bash
-uv pip install archtopo
+uv pip install karkas
 ```
 
 Or via standard `pip`:
 
 ```bash
-pip install archtopo
+pip install karkas
 ```
 
 Or run directly without installation via `uvx`:
 
 ```bash
-uvx archtopo generate .
+uvx karkas generate .
 ```
 
 ---
 
 ## 🛠️ Usage
 
-### 1. Generate Living Documentation
+### 1. Generate Living Skeleton Documentation
 
 ```bash
 # Scan current directory and generate docs:
-archtopo generate .
+karkas generate .
 
 # Or scan an external repository and specify custom outputs:
-archtopo generate /path/to/my-backend \
+karkas generate /path/to/my-backend \
   --obsidian ./docs/architecture \
   --agent ./docs/architecture_context.md \
   --ir ./docs/architecture_graph.json
@@ -232,7 +232,7 @@ archtopo generate /path/to/my-backend \
 Verify that all event schemas, handlers, and use-case references are valid:
 
 ```bash
-archtopo check .
+karkas check .
 ```
 
 ### 3. Compare Snapshots in CI/CD
@@ -241,34 +241,34 @@ Compare a PR branch against `main` to catch breaking changes:
 
 ```bash
 # Generate baseline snapshot from main:
-archtopo generate .main-baseline --ir main_graph.json
+karkas generate .main-baseline --ir main_graph.json
 
 # Compare current working directory against baseline:
-archtopo diff main_graph.json . --fail-on-breaking
+karkas diff main_graph.json . --fail-on-breaking
 ```
 
 ---
 
 ## 🤖 Empowering AI Coding Agents
 
-Modern AI coding agents (Antigravity, Cursor, Claude Code, GitHub Copilot) write better code when they understand the **holistic architecture** instead of guessing from isolated files.
+Modern AI coding agents (Antigravity, Cursor, Claude Code, GitHub Copilot) write better code when they understand the **holistic architecture skeleton** instead of guessing from isolated files.
 
 Add this instruction to your project's `AGENTS.md` or `.cursorrules`:
 
 ```markdown
-### Architecture Context
+### Architecture Skeleton Context
 Before writing or modifying any route, use case, or event handler:
 1. Refer to `docs/architecture_context.md` for existing bounded contexts and contracts.
 2. Follow the existing flow: Route -> Use Case -> Service / Unit of Work -> Event.
 3. Keep docstrings formatted in Sphinx/reST format.
-4. Regenerate architecture context using `archtopo generate .` after modifying signatures.
+4. Regenerate architecture context using `karkas generate .` after modifying signatures.
 ```
 
 ---
 
-## ⚙️ Configuration (`archtopo.yaml`)
+## ⚙️ Configuration (`karkas.yaml`)
 
-`archtopo` works out of the box with zero configuration for standard layouts. For custom projects, create `archtopo.yaml` in the repository root:
+`karkas` works out of the box with zero configuration for standard layouts. For custom projects, create `karkas.yaml` in the repository root:
 
 ```yaml
 project_name: "My Awesome Backend"
@@ -308,15 +308,15 @@ taskiq_task_decorators:
 
 ## 🪝 Pre-commit Integration
 
-Add `archtopo` to `.pre-commit-config.yaml` to keep documentation synchronized automatically with every commit:
+Add `karkas` to `.pre-commit-config.yaml` to keep documentation synchronized automatically with every commit:
 
 ```yaml
 repos:
-  - repo: https://github.com/yshlv/archtopo
+  - repo: https://github.com/yshlv/karkas
     rev: v0.1.0
     hooks:
-      - id: archtopo-generate
-      - id: archtopo-check
+      - id: karkas-generate
+      - id: karkas-check
 ```
 
 ---
@@ -349,17 +349,17 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Generate baseline snapshot
-        run: uvx archtopo generate .main-baseline --ir main_graph.json
+        run: uvx karkas generate .main-baseline --ir main_graph.json
 
       - name: Run Contract Diff Check
-        run: uvx archtopo diff main_graph.json . --fail-on-breaking
+        run: uvx karkas diff main_graph.json . --fail-on-breaking
 ```
 
 ---
 
 ## 📝 Docstrings Standard (reST format)
 
-`archtopo` parses docstrings to populate summaries, parameters, return types, and exceptions. Use Sphinx/reST format for optimal rendering:
+`karkas` parses docstrings to populate summaries, parameters, return types, and exceptions. Use Sphinx/reST format for optimal rendering:
 
 ```python
 async def register(

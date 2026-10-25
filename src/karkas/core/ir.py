@@ -1,4 +1,4 @@
-"""Intermediate Representation (IR) models for ArchTopo.
+"""Intermediate Representation (IR) models for Karkas.
 
 Provides a strongly-typed graph schema describing entrypoints (HTTP routes, CLI, tasks),
 use cases, domain services, domain events, channels (buses, queues, buffers),

@@ -5,10 +5,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from archtopo.config.schema import ArchTopoConfig
+from karkas.config.schema import KarkasConfig
 
 
-def run_headless_introspection(config: ArchTopoConfig) -> dict[str, Any]:
+def run_headless_introspection(config: KarkasConfig) -> dict[str, Any]:
     """Execute the introspection worker inside the target project environment."""
     root = Path(config.project_root).resolve()
     worker_script = Path(__file__).parent / "_worker.py"
@@ -43,8 +43,8 @@ def run_headless_introspection(config: ArchTopoConfig) -> dict[str, Any]:
         )
 
         stdout = proc.stdout
-        start_marker = "---ARCHTOPO_JSON_START---" if "---ARCHTOPO_JSON_START---" in stdout else "---ARCHDOC_JSON_START---"
-        end_marker = "---ARCHTOPO_JSON_END---" if "---ARCHTOPO_JSON_END---" in stdout else "---ARCHDOC_JSON_END---"
+        start_marker = "---KARKAS_JSON_START---"
+        end_marker = "---KARKAS_JSON_END---"
 
         if start_marker in stdout and end_marker in stdout:
             part = stdout.split(start_marker)[1].split(end_marker)[0]

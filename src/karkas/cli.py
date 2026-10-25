@@ -1,4 +1,4 @@
-"""Command Line Interface (CLI) for ArchTopo."""
+"""Command Line Interface (CLI) for Karkas."""
 
 import sys
 from pathlib import Path
@@ -21,21 +21,21 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from archtopo.config.detector import load_or_detect_config
-from archtopo.core.diff import diff_graphs
-from archtopo.core.ir import ArchitectureGraph
-from archtopo.core.linker import ArchitectureLinker
-from archtopo.extractors.ast_visitor import scan_directory_ast
-from archtopo.extractors.runtime_runner import run_headless_introspection
-from archtopo.renderers.agent_context import (
+from karkas.config.detector import load_or_detect_config
+from karkas.core.diff import diff_graphs
+from karkas.core.ir import ArchitectureGraph
+from karkas.core.linker import ArchitectureLinker
+from karkas.extractors.ast_visitor import scan_directory_ast
+from karkas.extractors.runtime_runner import run_headless_introspection
+from karkas.renderers.agent_context import (
     render_agent_context_markdown,
     render_ir_json,
 )
-from archtopo.renderers.obsidian.renderer import ObsidianVaultRenderer
+from karkas.renderers.obsidian.renderer import ObsidianVaultRenderer
 
 app = typer.Typer(
-    name="archtopo",
-    help="Live Architecture Topology & Contract Validator for Python Backends",
+    name="karkas",
+    help="Live Architecture Skeleton & Contract Validator for Python Backends",
     add_completion=False,
 )
 console = Console(legacy_windows=False)
@@ -46,7 +46,7 @@ def _build_graph_for_project(project_root: str | Path) -> ArchitectureGraph:
     config = load_or_detect_config(project_root)
     root = Path(config.project_root).resolve()
 
-    with console.status(f"[bold cyan]Scanning AST in {root}...[/bold cyan]"):
+    with console.status(f"[bold cyan]Scanning AST skeleton in {root}...[/bold cyan]"):
         ast_result = scan_directory_ast(root, config)
 
     with console.status("[bold cyan]Running headless runtime introspection...[/bold cyan]"):
@@ -66,7 +66,7 @@ def generate(
     agent_file: Annotated[str | None, typer.Option("--agent", "-a", help="Target AI agent context markdown file")] = None,
     ir_file: Annotated[str | None, typer.Option("--ir", help="Target Architecture Graph JSON file")] = None,
 ) -> None:
-    """Scan a Python backend project, build the architecture topology graph, and generate documentation.
+    """Scan a Python backend project, build the architectural skeleton, and generate documentation.
 
     Outputs produced:
     1. Obsidian Vault: Structured markdown notes with [[wikilinks]], metadata tags, and Mermaid diagrams.
@@ -74,9 +74,9 @@ def generate(
     3. Architecture IR: Machine-readable architecture_graph.json for CI/CD diffing.
 
     Examples:
-      archtopo generate .
-      archtopo generate ./my-backend --obsidian ./docs/architecture
-      archtopo generate . -o ./docs/vault -a ./docs/agent_context.md --ir ./docs/arch_graph.json
+      karkas generate .
+      karkas generate ./my-backend --obsidian ./docs/architecture
+      karkas generate . -o ./docs/vault -a ./docs/agent_context.md --ir ./docs/arch_graph.json
     """
     root = Path(path).resolve()
     if not root.exists():
@@ -89,7 +89,7 @@ def generate(
     out_agent = Path(agent_file) if agent_file else (root / config.output_agent_context_file)
     out_ir = Path(ir_file) if ir_file else (root / config.output_ir_json_file)
 
-    console.print(Panel(f"[bold green]ArchTopo Generator[/bold green]\nTarget: [cyan]{root}[/cyan]"))
+    console.print(Panel(f"[bold green]Karkas Generator[/bold green]\nTarget: [cyan]{root}[/cyan]"))
 
     graph = _build_graph_for_project(root)
 
@@ -101,7 +101,7 @@ def generate(
         render_agent_context_markdown(graph, out_agent)
         render_ir_json(graph, out_ir)
 
-    table = Table(title="Architecture Discovery Summary", header_style="bold magenta")
+    table = Table(title="Karkas Architecture Discovery Summary", header_style="bold magenta")
     table.add_column("Component", style="dim")
     table.add_column("Count", justify="right", style="bold green")
 
@@ -115,7 +115,7 @@ def generate(
     table.add_row("Graph Edges", str(len(graph.edges)))
 
     console.print(table)
-    console.print("\n✨ [bold green]Successfully generated live documentation:[/bold green]")
+    console.print("\n✨ [bold green]Successfully generated live architecture skeleton:[/bold green]")
     console.print(f"  📁 Obsidian Vault: [cyan]{out_obsidian}[/cyan]")
     console.print(f"  📄 AI Context:    [cyan]{out_agent}[/cyan]")
     console.print(f"  📦 JSON Graph:     [cyan]{out_ir}[/cyan]\n")
@@ -133,8 +133,8 @@ def diff(
     and missing consumer event handlers.
 
     Examples:
-      archtopo diff base_graph.json head_graph.json
-      archtopo diff main_graph.json . --fail-on-breaking
+      karkas diff base_graph.json head_graph.json
+      karkas diff main_graph.json . --fail-on-breaking
     """
     base_path = Path(base)
     if not base_path.exists():
@@ -150,7 +150,7 @@ def diff(
         head_graph = ArchitectureGraph.model_validate_json(head_path.read_text(encoding="utf-8"))
 
     report = diff_graphs(base_graph, head_graph)
-    console.print(Panel(report.to_markdown(), title="ArchTopo Contract Diff Report"))
+    console.print(Panel(report.to_markdown(), title="Karkas Contract Diff Report"))
 
     if report.has_breaking_changes and fail_on_breaking:
         console.print("[bold red]CI Failure:[/bold red] Breaking changes detected in domain event contracts!")
@@ -164,8 +164,8 @@ def check(
     """Fast sanity check verifying that architecture contracts, events, and handlers are valid.
 
     Examples:
-      archtopo check .
-      archtopo check /path/to/project
+      karkas check .
+      karkas check /path/to/project
     """
     root = Path(path).resolve()
     graph = _build_graph_for_project(root)

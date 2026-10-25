@@ -1,27 +1,23 @@
-"""Automatic heuristic detector and config loader for ArchTopo."""
+"""Automatic heuristic detector and config loader for Karkas."""
 
 from pathlib import Path
 
 import yaml
 
-from archtopo.config.schema import ArchTopoConfig
+from karkas.config.schema import KarkasConfig
 
 
-def load_or_detect_config(project_root: str | Path) -> ArchTopoConfig:
-    """Load archtopo.yaml (or legacy archdoc.yaml) if exists, or heuristically infer project settings."""
+def load_or_detect_config(project_root: str | Path) -> KarkasConfig:
+    """Load karkas.yaml if exists, or heuristically infer project settings."""
     root = Path(project_root).resolve()
-    config_file = root / "archtopo.yaml"
-    if not config_file.exists():
-        legacy_file = root / "archdoc.yaml"
-        if legacy_file.exists():
-            config_file = legacy_file
+    config_file = root / "karkas.yaml"
 
     if config_file.exists():
         try:
             with open(config_file, encoding="utf-8") as f:
                 raw_data = yaml.safe_load(f) or {}
                 raw_data.setdefault("project_root", str(root))
-                return ArchTopoConfig.model_validate(raw_data)
+                return KarkasConfig.model_validate(raw_data)
         except Exception:
             pass
 
@@ -48,7 +44,7 @@ def load_or_detect_config(project_root: str | Path) -> ArchTopoConfig:
             pass
 
     # Find candidate paths
-    config = ArchTopoConfig(project_name=project_name, project_root=str(root))
+    config = KarkasConfig(project_name=project_name, project_root=str(root))
 
     # Validate and filter source paths that actually exist
     existing_routes = [p for p in config.routes_paths if (root / p).exists()]

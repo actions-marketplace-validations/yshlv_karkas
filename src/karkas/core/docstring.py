@@ -1,4 +1,4 @@
-"""Docstring parsing and cleaning utilities for ArchTopo."""
+"""Docstring parsing and cleaning utilities for Karkas."""
 
 import inspect
 import re

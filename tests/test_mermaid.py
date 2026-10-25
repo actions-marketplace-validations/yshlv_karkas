@@ -1,6 +1,6 @@
 """Unit tests for Mermaid diagram generation."""
 
-from archtopo.core.ir import (
+from karkas.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
     DomainEventNode,
@@ -13,7 +13,7 @@ from archtopo.core.ir import (
     StorageEntityNode,
     UseCaseNode,
 )
-from archtopo.renderers.mermaid import (
+from karkas.renderers.mermaid import (
     generate_domain_diagram,
     generate_event_flowchart,
     generate_system_overview,

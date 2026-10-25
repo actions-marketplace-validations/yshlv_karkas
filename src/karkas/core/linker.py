@@ -3,10 +3,10 @@
 from pathlib import Path
 from typing import Any
 
-from archtopo.config.schema import ArchTopoConfig
-from archtopo.core.docstring import clean_summary
-from archtopo.core.domain import normalize_domain_name
-from archtopo.core.ir import (
+from karkas.config.schema import KarkasConfig
+from karkas.core.docstring import clean_summary
+from karkas.core.domain import normalize_domain_name
+from karkas.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
     ChannelNode,
@@ -22,13 +22,13 @@ from archtopo.core.ir import (
     StorageEntityNode,
     UseCaseNode,
 )
-from archtopo.extractors.ast_visitor import AstScanResult
+from karkas.extractors.ast_visitor import AstScanResult
 
 
 class ArchitectureLinker:
     """Combines AST and Runtime data into a validated ArchitectureGraph."""
 
-    def __init__(self, config: ArchTopoConfig) -> None:
+    def __init__(self, config: KarkasConfig) -> None:
         self.config = config
 
     def link(self, ast_data: AstScanResult, runtime_data: dict[str, Any]) -> ArchitectureGraph:

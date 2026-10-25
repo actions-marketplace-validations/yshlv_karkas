@@ -1,4 +1,4 @@
-"""Static AST Extractor for ArchTopo.
+"""Static AST Extractor for Karkas.
 
 Visits Python ASTs to extract:
 1. Entrypoints: HTTP API routes (@router.post, etc.), CLI commands, Taskiq background tasks (@broker.task).
@@ -14,10 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from archtopo.config.schema import ArchTopoConfig
-from archtopo.core.docstring import clean_summary
-from archtopo.core.domain import infer_domain_from_path, is_ignored_path
-from archtopo.core.ir import SourceLocation
+from karkas.config.schema import KarkasConfig
+from karkas.core.docstring import clean_summary
+from karkas.core.domain import infer_domain_from_path, is_ignored_path
+from karkas.core.ir import SourceLocation
 
 
 @dataclass
@@ -116,7 +116,7 @@ class AstScanResult:
 class CodebaseAstVisitor(ast.NodeVisitor):
     """AST visitor traversing a single Python source file."""
 
-    def __init__(self, file_path: str, config: ArchTopoConfig) -> None:
+    def __init__(self, file_path: str, config: KarkasConfig) -> None:
         self.file_path = file_path
         self.config = config
         self.norm_path = file_path.replace("\\", "/")
@@ -514,7 +514,7 @@ class CodebaseAstVisitor(ast.NodeVisitor):
         return route_meta, handler_meta, task_meta
 
 
-def scan_directory_ast(target_dir: str | Path, config: ArchTopoConfig) -> AstScanResult:
+def scan_directory_ast(target_dir: str | Path, config: KarkasConfig) -> AstScanResult:
     """Recursively scan Python files in target_dir and aggregate AST results."""
     result = AstScanResult()
     root = Path(target_dir).resolve()
