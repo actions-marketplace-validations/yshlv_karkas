@@ -1,4 +1,4 @@
-"""Domain and Bounded Context normalization rules for ArchDoc."""
+"""Domain and Bounded Context normalization rules for ArchTopo."""
 
 from pathlib import Path
 

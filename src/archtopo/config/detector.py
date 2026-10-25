@@ -1,23 +1,27 @@
-"""Automatic heuristic detector and config loader for ArchDoc."""
+"""Automatic heuristic detector and config loader for ArchTopo."""
 
 from pathlib import Path
 
 import yaml
 
-from archdoc.config.schema import ArchDocConfig
+from archtopo.config.schema import ArchTopoConfig
 
 
-def load_or_detect_config(project_root: str | Path) -> ArchDocConfig:
-    """Load archdoc.yaml if exists, or heuristically infer project settings."""
+def load_or_detect_config(project_root: str | Path) -> ArchTopoConfig:
+    """Load archtopo.yaml (or legacy archdoc.yaml) if exists, or heuristically infer project settings."""
     root = Path(project_root).resolve()
-    config_file = root / "archdoc.yaml"
+    config_file = root / "archtopo.yaml"
+    if not config_file.exists():
+        legacy_file = root / "archdoc.yaml"
+        if legacy_file.exists():
+            config_file = legacy_file
 
     if config_file.exists():
         try:
             with open(config_file, encoding="utf-8") as f:
                 raw_data = yaml.safe_load(f) or {}
                 raw_data.setdefault("project_root", str(root))
-                return ArchDocConfig.model_validate(raw_data)
+                return ArchTopoConfig.model_validate(raw_data)
         except Exception:
             pass
 
@@ -44,7 +48,7 @@ def load_or_detect_config(project_root: str | Path) -> ArchDocConfig:
             pass
 
     # Find candidate paths
-    config = ArchDocConfig(project_name=project_name, project_root=str(root))
+    config = ArchTopoConfig(project_name=project_name, project_root=str(root))
 
     # Validate and filter source paths that actually exist
     existing_routes = [p for p in config.routes_paths if (root / p).exists()]

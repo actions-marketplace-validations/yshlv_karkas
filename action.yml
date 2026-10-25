@@ -1,13 +1,13 @@
-name: "ArchDoc - Architecture Contract & Docs Action"
-description: "Scan Python backend architectures, generate Obsidian docs, and validate PR contract breaking changes."
-author: "ArchDoc Contributors"
+name: "ArchTopo - Architecture Topology & Contract Action"
+description: "Scan Python backend architectures, generate Obsidian topology docs, and validate PR contract breaking changes."
+author: "ArchTopo Contributors"
 branding:
   icon: "layers"
   color: "purple"
 
 inputs:
   command:
-    description: "ArchDoc command to run ('generate', 'diff', or 'check')"
+    description: "ArchTopo command to run ('generate', 'diff', or 'check')"
     required: false
     default: "check"
   args:
@@ -32,7 +32,7 @@ runs:
       with:
         version: "latest"
 
-    - name: Run ArchDoc
+    - name: Run ArchTopo
       shell: bash
       run: |
-        uvx archdoc ${{ inputs.command }} ${{ inputs.args }}
+        uvx archtopo ${{ inputs.command }} ${{ inputs.args }}

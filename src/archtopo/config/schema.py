@@ -1,10 +1,10 @@
-"""Configuration schemas for ArchDoc."""
+"""Configuration schemas for ArchTopo."""
 
 from pydantic import BaseModel, Field
 
 
-class ArchDocConfig(BaseModel):
-    """ArchDoc project configuration."""
+class ArchTopoConfig(BaseModel):
+    """ArchTopo project configuration."""
 
     project_name: str = "project"
     project_root: str = "."
@@ -57,3 +57,7 @@ class ArchDocConfig(BaseModel):
     output_obsidian_dir: str = "docs/architecture"
     output_agent_context_file: str = "docs/architecture_context.md"
     output_ir_json_file: str = "docs/architecture_graph.json"
+
+
+# Backward compatibility alias
+ArchDocConfig = ArchTopoConfig

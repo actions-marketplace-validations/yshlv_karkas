@@ -2,8 +2,8 @@ import json
 import re
 from pathlib import Path
 
-from archdoc.core.docstring import format_docstring_markdown
-from archdoc.core.ir import (
+from archtopo.core.docstring import format_docstring_markdown
+from archtopo.core.ir import (
     ArchitectureGraph,
     DomainEventNode,
     EdgeType,
@@ -14,7 +14,7 @@ from archdoc.core.ir import (
     StorageEntityNode,
     UseCaseNode,
 )
-from archdoc.renderers.mermaid import (
+from archtopo.renderers.mermaid import (
     generate_domain_diagram,
     generate_event_flowchart,
     generate_flow_sequence_diagram,
@@ -518,7 +518,7 @@ class ObsidianVaultRenderer:
         path.write_text("\n".join(lines), encoding="utf-8")
 
     def _render_domain(self, domain: str, graph: ArchitectureGraph, path: Path) -> None:
-        from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
+        from archtopo.core.domain import DOMAIN_DISPLAY_TITLES
 
         dom_title = DOMAIN_DISPLAY_TITLES.get(domain, domain.capitalize())
         dom_diagram = generate_domain_diagram(domain, graph)
@@ -661,7 +661,7 @@ class ObsidianVaultRenderer:
             "## 🏰 Domain Bounded Contexts",
             "",
         ]
-        from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
+        from archtopo.core.domain import DOMAIN_DISPLAY_TITLES
 
         for dom in graph.get_domains():
             d_title = DOMAIN_DISPLAY_TITLES.get(dom, dom.capitalize())

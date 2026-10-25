@@ -1,15 +1,15 @@
-- id: archdoc-check
-  name: archdoc-check
+- id: archtopo-check
+  name: archtopo-check
   description: Validate architecture contracts, event schemas, and handler registrations
-  entry: archdoc check
+  entry: archtopo check
   language: python
   types: [python]
   pass_filenames: false
 
-- id: archdoc-generate
-  name: archdoc-generate
+- id: archtopo-generate
+  name: archtopo-generate
   description: Regenerate Obsidian architecture documentation and AI agent snapshot
-  entry: archdoc generate
+  entry: archtopo generate
   language: python
   types: [python]
   pass_filenames: false

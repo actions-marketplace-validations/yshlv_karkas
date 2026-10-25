@@ -1,6 +1,6 @@
 """Unit tests for Mermaid diagram generation."""
 
-from archdoc.core.ir import (
+from archtopo.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
     DomainEventNode,
@@ -13,7 +13,7 @@ from archdoc.core.ir import (
     StorageEntityNode,
     UseCaseNode,
 )
-from archdoc.renderers.mermaid import (
+from archtopo.renderers.mermaid import (
     generate_domain_diagram,
     generate_event_flowchart,
     generate_system_overview,

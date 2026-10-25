@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from archdoc.core.ir import ArchitectureGraph, EdgeType, EntrypointNode
+from archtopo.core.ir import ArchitectureGraph, EdgeType, EntrypointNode
 
 
 def render_agent_context_markdown(graph: ArchitectureGraph, output_file: str | Path) -> None:

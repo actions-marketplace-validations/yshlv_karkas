@@ -1,4 +1,4 @@
-"""Mermaid diagram generation for ArchDoc.
+"""Mermaid diagram generation for ArchTopo.
 
 Produces:
 1. High-Level Bounded Context Architecture Map (clean, executive-level).
@@ -10,7 +10,7 @@ Produces:
 
 import re
 
-from archdoc.core.ir import (
+from archtopo.core.ir import (
     ArchitectureGraph,
     ChannelType,
     DomainEventNode,
@@ -314,7 +314,7 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
 
 def generate_system_overview(graph: ArchitectureGraph) -> str:
     """Generate high-level Bounded Context Architecture Map with full system topology."""
-    from archdoc.core.domain import DOMAIN_DISPLAY_TITLES
+    from archtopo.core.domain import DOMAIN_DISPLAY_TITLES
 
     lines = [
         "flowchart TB",

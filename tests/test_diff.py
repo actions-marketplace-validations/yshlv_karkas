@@ -1,7 +1,7 @@
-"""Unit tests for ArchDoc breaking changes diff engine."""
+"""Unit tests for ArchTopo breaking changes diff engine."""
 
-from archdoc.core.diff import ChangeLevel, diff_graphs
-from archdoc.core.ir import ArchitectureGraph, DomainEventNode, EventField
+from archtopo.core.diff import ChangeLevel, diff_graphs
+from archtopo.core.ir import ArchitectureGraph, DomainEventNode, EventField
 
 
 def test_diff_detects_breaking_and_compatible_changes() -> None:

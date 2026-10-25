@@ -4,7 +4,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from archdoc.core.ir import ArchitectureGraph, DomainEventNode
+from archtopo.core.ir import ArchitectureGraph, DomainEventNode
 
 
 class ChangeLevel(StrEnum):
@@ -29,11 +29,11 @@ class DiffReport(BaseModel):
     def to_markdown(self) -> str:
         """Render diff report as markdown for CI/CD or PR comments."""
         if not self.items:
-            return "### 🟢 ArchDoc Contract Check: No architectural breaking changes detected."
+            return "### 🟢 ArchTopo Contract Check: No architectural breaking changes detected."
 
         status_emoji = "🔴" if self.has_breaking_changes else "🟡"
         lines = [
-            f"### {status_emoji} ArchDoc Architecture & Contract Diff Report",
+            f"### {status_emoji} ArchTopo Architecture & Contract Diff Report",
             "",
             f"**Status:** {'BREAKING CHANGES DETECTED' if self.has_breaking_changes else 'Changes are backward-compatible.'}",
             "",

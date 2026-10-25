@@ -1,4 +1,4 @@
-"""Command Line Interface (CLI) for ArchDoc."""
+"""Command Line Interface (CLI) for ArchTopo."""
 
 import sys
 from pathlib import Path
@@ -21,21 +21,21 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from archdoc.config.detector import load_or_detect_config
-from archdoc.core.diff import diff_graphs
-from archdoc.core.ir import ArchitectureGraph
-from archdoc.core.linker import ArchitectureLinker
-from archdoc.extractors.ast_visitor import scan_directory_ast
-from archdoc.extractors.runtime_runner import run_headless_introspection
-from archdoc.renderers.agent_context import (
+from archtopo.config.detector import load_or_detect_config
+from archtopo.core.diff import diff_graphs
+from archtopo.core.ir import ArchitectureGraph
+from archtopo.core.linker import ArchitectureLinker
+from archtopo.extractors.ast_visitor import scan_directory_ast
+from archtopo.extractors.runtime_runner import run_headless_introspection
+from archtopo.renderers.agent_context import (
     render_agent_context_markdown,
     render_ir_json,
 )
-from archdoc.renderers.obsidian.renderer import ObsidianVaultRenderer
+from archtopo.renderers.obsidian.renderer import ObsidianVaultRenderer
 
 app = typer.Typer(
-    name="archdoc",
-    help="Live Architecture Documentation Generator & Contract Validator for Python Backends",
+    name="archtopo",
+    help="Live Architecture Topology & Contract Validator for Python Backends",
     add_completion=False,
 )
 console = Console(legacy_windows=False)
@@ -66,7 +66,7 @@ def generate(
     agent_file: Annotated[str | None, typer.Option("--agent", "-a", help="Target AI agent context markdown file")] = None,
     ir_file: Annotated[str | None, typer.Option("--ir", help="Target Architecture Graph JSON file")] = None,
 ) -> None:
-    """Scan a Python backend project, build the architecture graph, and generate documentation.
+    """Scan a Python backend project, build the architecture topology graph, and generate documentation.
 
     Outputs produced:
     1. Obsidian Vault: Structured markdown notes with [[wikilinks]], metadata tags, and Mermaid diagrams.
@@ -74,9 +74,9 @@ def generate(
     3. Architecture IR: Machine-readable architecture_graph.json for CI/CD diffing.
 
     Examples:
-      archdoc generate .
-      archdoc generate ./my-backend --obsidian ./docs/architecture
-      archdoc generate . -o ./docs/vault -a ./docs/agent_context.md --ir ./docs/arch_graph.json
+      archtopo generate .
+      archtopo generate ./my-backend --obsidian ./docs/architecture
+      archtopo generate . -o ./docs/vault -a ./docs/agent_context.md --ir ./docs/arch_graph.json
     """
     root = Path(path).resolve()
     if not root.exists():
@@ -89,7 +89,7 @@ def generate(
     out_agent = Path(agent_file) if agent_file else (root / config.output_agent_context_file)
     out_ir = Path(ir_file) if ir_file else (root / config.output_ir_json_file)
 
-    console.print(Panel(f"[bold green]ArchDoc Generator[/bold green]\nTarget: [cyan]{root}[/cyan]"))
+    console.print(Panel(f"[bold green]ArchTopo Generator[/bold green]\nTarget: [cyan]{root}[/cyan]"))
 
     graph = _build_graph_for_project(root)
 
@@ -133,8 +133,8 @@ def diff(
     and missing consumer event handlers.
 
     Examples:
-      archdoc diff base_graph.json head_graph.json
-      archdoc diff main_graph.json . --fail-on-breaking
+      archtopo diff base_graph.json head_graph.json
+      archtopo diff main_graph.json . --fail-on-breaking
     """
     base_path = Path(base)
     if not base_path.exists():
@@ -150,7 +150,7 @@ def diff(
         head_graph = ArchitectureGraph.model_validate_json(head_path.read_text(encoding="utf-8"))
 
     report = diff_graphs(base_graph, head_graph)
-    console.print(Panel(report.to_markdown(), title="ArchDoc Contract Diff Report"))
+    console.print(Panel(report.to_markdown(), title="ArchTopo Contract Diff Report"))
 
     if report.has_breaking_changes and fail_on_breaking:
         console.print("[bold red]CI Failure:[/bold red] Breaking changes detected in domain event contracts!")
@@ -164,8 +164,8 @@ def check(
     """Fast sanity check verifying that architecture contracts, events, and handlers are valid.
 
     Examples:
-      archdoc check .
-      archdoc check /path/to/project
+      archtopo check .
+      archtopo check /path/to/project
     """
     root = Path(path).resolve()
     graph = _build_graph_for_project(root)

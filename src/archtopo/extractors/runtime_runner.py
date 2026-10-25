@@ -5,10 +5,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from archdoc.config.schema import ArchDocConfig
+from archtopo.config.schema import ArchTopoConfig
 
 
-def run_headless_introspection(config: ArchDocConfig) -> dict[str, Any]:
+def run_headless_introspection(config: ArchTopoConfig) -> dict[str, Any]:
     """Execute the introspection worker inside the target project environment."""
     root = Path(config.project_root).resolve()
     worker_script = Path(__file__).parent / "_worker.py"
@@ -43,8 +43,11 @@ def run_headless_introspection(config: ArchDocConfig) -> dict[str, Any]:
         )
 
         stdout = proc.stdout
-        if "---ARCHDOC_JSON_START---" in stdout and "---ARCHDOC_JSON_END---" in stdout:
-            part = stdout.split("---ARCHDOC_JSON_START---")[1].split("---ARCHDOC_JSON_END---")[0]
+        start_marker = "---ARCHTOPO_JSON_START---" if "---ARCHTOPO_JSON_START---" in stdout else "---ARCHDOC_JSON_START---"
+        end_marker = "---ARCHTOPO_JSON_END---" if "---ARCHTOPO_JSON_END---" in stdout else "---ARCHDOC_JSON_END---"
+
+        if start_marker in stdout and end_marker in stdout:
+            part = stdout.split(start_marker)[1].split(end_marker)[0]
             return json.loads(part.strip())
         else:
             return {"events": [], "registry_handlers": [], "tables": [], "errors": [proc.stderr or proc.stdout]}

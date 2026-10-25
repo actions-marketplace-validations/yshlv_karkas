@@ -1,6 +1,6 @@
-"""Unit tests for ArchDoc IR models."""
+"""Unit tests for ArchTopo IR models."""
 
-from archdoc.core.ir import (
+from archtopo.core.ir import (
     ArchitectureEdge,
     ArchitectureGraph,
     DomainEventNode,

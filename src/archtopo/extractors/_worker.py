@@ -246,6 +246,6 @@ if __name__ == "__main__":
     project_root_arg = sys.argv[1]
     config_arg = sys.argv[2]
     data = safe_introspect(project_root_arg, config_arg)
-    print("---ARCHDOC_JSON_START---")
+    print("---ARCHTOPO_JSON_START---")
     print(json.dumps(data, default=str))
-    print("---ARCHDOC_JSON_END---")
+    print("---ARCHTOPO_JSON_END---")

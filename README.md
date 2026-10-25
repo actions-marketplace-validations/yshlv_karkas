@@ -1,17 +1,17 @@
-# 🏛️ ArchDoc
+# 🏛️ ArchTopo
 
-**Live Architecture Documentation & Contract Validator for Python Backends.**
+**Live Architecture Topology & Contract Validator for Python Backends.**
 
-[![PyPI Version](https://img.shields.io/pypi/v/archdoc.svg?color=blue)](https://pypi.org/project/archdoc/)
-[![CI](https://github.com/wecandevelopit/archdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/wecandevelopit/archdoc/actions/workflows/ci.yml)
+[![PyPI Version](https://img.shields.io/pypi/v/archtopo.svg?color=blue)](https://pypi.org/project/archtopo/)
+[![CI](https://github.com/yshlv/archtopo/actions/workflows/ci.yml/badge.svg)](https://github.com/yshlv/archtopo/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Obsidian Ready](https://img.shields.io/badge/obsidian-vault-purple.svg)](https://obsidian.md/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-`archdoc` bridges the gap between fast-moving backend codebases and living technical documentation. It eliminates stale Confluence pages, manual Lucidchart diagrams, and unreadable AST import graphs.
+`archtopo` bridges the gap between fast-moving backend codebases and living technical documentation. It eliminates stale Confluence pages, manual Lucidchart diagrams, and unreadable AST import graphs.
 
-Instead, `archdoc` reconstructs the **real execution topology** of your async backend:
+Instead, `archtopo` reconstructs the **real execution topology** of your async backend:
 - 🌐 **Ingress Entrypoints:** FastAPI routes, CLI commands, and Taskiq/Celery background workers.
 - 🎬 **Application Workflows (Use Cases):** Step-by-step orchestrations, service invocations, and Unit of Work persistence.
 - 🚀 **Domain Services & Ports:** Business logic, external integrations, and database operations.
@@ -22,7 +22,7 @@ Instead, `archdoc` reconstructs the **real execution topology** of your async ba
 
 ## 🗺️ Live Architecture Topology
 
-`archdoc` traces code top-down—from API entrypoints all the way down to database writes and distributed events:
+`archtopo` traces code top-down—from API entrypoints all the way down to database writes and distributed events:
 
 ```mermaid
 flowchart LR
@@ -79,7 +79,7 @@ flowchart LR
                     │ Python Backend Codebase│
                     └───────────┬────────────┘
                                 │
-                        [ archdoc scan ]
+                        [ archtopo scan ]
                                 │
          ┌──────────────────────┼──────────────────────┐
          ▼                                             ▼
@@ -144,10 +144,10 @@ When opening the generated documentation folder in [Obsidian](https://obsidian.m
 
 ### 2. Rich CLI Execution
 
-Run `archdoc generate .` in your terminal to view interactive scanning progress and a detailed summary table:
+Run `archtopo generate .` in your terminal to view interactive scanning progress and a detailed summary table:
 
 ```
-╭─────────────────────────────── ArchDoc Analysis ──────────────────────────────╮
+╭─────────────────────────────── ArchTopo Analysis ─────────────────────────────╮
 │ Project: InventX Backend  •  Python: 3.12.10  •  Roots: src/                  │
 ╰───────────────────────────────────────────────────────────────────────────────╯
  Scanning source files: ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:01
@@ -171,7 +171,7 @@ Run `archdoc generate .` in your terminal to view interactive scanning progress 
 
 ### 3. CI/CD Contract Guard (Pull Request Diff)
 
-Prevent silent schema breaks between frontend and backend, or producer and consumer services. `archdoc diff` flags breaking contract changes before merging:
+Prevent silent schema breaks between frontend and backend, or producer and consumer services. `archtopo diff` flags breaking contract changes before merging:
 
 ```
 🚨 ARCHITECTURE CONTRACT VIOLATION DETECTED
@@ -195,19 +195,19 @@ Process exited with code 1.
 Install via `uv` (recommended):
 
 ```bash
-uv pip install archdoc
+uv pip install archtopo
 ```
 
 Or via standard `pip`:
 
 ```bash
-pip install archdoc
+pip install archtopo
 ```
 
 Or run directly without installation via `uvx`:
 
 ```bash
-uvx archdoc generate .
+uvx archtopo generate .
 ```
 
 ---
@@ -218,10 +218,10 @@ uvx archdoc generate .
 
 ```bash
 # Scan current directory and generate docs:
-archdoc generate .
+archtopo generate .
 
 # Or scan an external repository and specify custom outputs:
-archdoc generate /path/to/my-backend \
+archtopo generate /path/to/my-backend \
   --obsidian ./docs/architecture \
   --agent ./docs/architecture_context.md \
   --ir ./docs/architecture_graph.json
@@ -232,7 +232,7 @@ archdoc generate /path/to/my-backend \
 Verify that all event schemas, handlers, and use-case references are valid:
 
 ```bash
-archdoc check .
+archtopo check .
 ```
 
 ### 3. Compare Snapshots in CI/CD
@@ -241,10 +241,10 @@ Compare a PR branch against `main` to catch breaking changes:
 
 ```bash
 # Generate baseline snapshot from main:
-archdoc generate .main-baseline --ir main_graph.json
+archtopo generate .main-baseline --ir main_graph.json
 
 # Compare current working directory against baseline:
-archdoc diff main_graph.json . --fail-on-breaking
+archtopo diff main_graph.json . --fail-on-breaking
 ```
 
 ---
@@ -261,14 +261,14 @@ Before writing or modifying any route, use case, or event handler:
 1. Refer to `docs/architecture_context.md` for existing bounded contexts and contracts.
 2. Follow the existing flow: Route -> Use Case -> Service / Unit of Work -> Event.
 3. Keep docstrings formatted in Sphinx/reST format.
-4. Regenerate architecture context using `archdoc generate .` after modifying signatures.
+4. Regenerate architecture context using `archtopo generate .` after modifying signatures.
 ```
 
 ---
 
-## ⚙️ Configuration (`archdoc.yaml`)
+## ⚙️ Configuration (`archtopo.yaml`)
 
-`archdoc` works out of the box with zero configuration for standard layouts. For custom projects, create `archdoc.yaml` in the repository root:
+`archtopo` works out of the box with zero configuration for standard layouts. For custom projects, create `archtopo.yaml` in the repository root:
 
 ```yaml
 project_name: "My Awesome Backend"
@@ -308,15 +308,15 @@ taskiq_task_decorators:
 
 ## 🪝 Pre-commit Integration
 
-Add `archdoc` to `.pre-commit-config.yaml` to keep documentation synchronized automatically with every commit:
+Add `archtopo` to `.pre-commit-config.yaml` to keep documentation synchronized automatically with every commit:
 
 ```yaml
 repos:
-  - repo: https://github.com/wecandevelopit/archdoc
+  - repo: https://github.com/yshlv/archtopo
     rev: v0.1.0
     hooks:
-      - id: archdoc-generate
-      - id: archdoc-check
+      - id: archtopo-generate
+      - id: archtopo-check
 ```
 
 ---
@@ -349,17 +349,17 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Generate baseline snapshot
-        run: uvx archdoc generate .main-baseline --ir main_graph.json
+        run: uvx archtopo generate .main-baseline --ir main_graph.json
 
       - name: Run Contract Diff Check
-        run: uvx archdoc diff main_graph.json . --fail-on-breaking
+        run: uvx archtopo diff main_graph.json . --fail-on-breaking
 ```
 
 ---
 
 ## 📝 Docstrings Standard (reST format)
 
-`archdoc` parses docstrings to populate summaries, parameters, return types, and exceptions. Use Sphinx/reST format for optimal rendering:
+`archtopo` parses docstrings to populate summaries, parameters, return types, and exceptions. Use Sphinx/reST format for optimal rendering:
 
 ```python
 async def register(

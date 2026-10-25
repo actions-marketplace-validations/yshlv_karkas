@@ -1,14 +1,15 @@
 [project]
-name = "archdoc"
+name = "archtopo"
 version = "0.1.0"
-description = "Live Architecture Documentation & Contract Validator for Python Backends"
+description = "Live Architecture Topology & Contract Validator for Python Backends"
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "ArchDoc Contributors" }
+    { name = "ArchTopo Contributors" }
 ]
 keywords = [
     "architecture",
+    "topology",
     "documentation",
     "fastapi",
     "clean-architecture",
@@ -40,10 +41,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/wecandevelopit/archdoc"
-Repository = "https://github.com/wecandevelopit/archdoc"
-Documentation = "https://github.com/wecandevelopit/archdoc#readme"
-Issues = "https://github.com/wecandevelopit/archdoc/issues"
+Homepage = "https://github.com/yshlv/archtopo"
+Repository = "https://github.com/yshlv/archtopo"
+Documentation = "https://github.com/yshlv/archtopo#readme"
+Issues = "https://github.com/yshlv/archtopo/issues"
 
 [dependency-groups]
 dev = [
@@ -53,7 +54,7 @@ dev = [
 ]
 
 [project.scripts]
-archdoc = "archdoc.cli:app"
+archtopo = "archtopo.cli:app"
 
 [tool.ruff.lint]
 ignore = ["BLE001", "S110", "S112", "PERF102"]
