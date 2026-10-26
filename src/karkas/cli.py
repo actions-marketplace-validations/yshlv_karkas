@@ -41,6 +41,23 @@ app = typer.Typer(
 console = Console(legacy_windows=False)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from karkas import __version__
+        console.print(f"karkas version: [bold cyan]{__version__}[/bold cyan]")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool | None,
+        typer.Option("--version", "-v", help="Show karkas version and exit.", callback=_version_callback, is_eager=True),
+    ] = None,
+) -> None:
+    """Karkas: Live Architecture Skeleton & Contract Validator."""
+
+
 def _build_graph_for_project(project_root: str | Path) -> ArchitectureGraph:
     """Internal helper to scan and link an ArchitectureGraph for a project."""
     config = load_or_detect_config(project_root)
