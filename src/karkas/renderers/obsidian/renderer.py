@@ -96,6 +96,9 @@ class ObsidianVaultRenderer:
         # 9. Render Index (MOC)
         self._render_index(graph, self.output_dir / "index.md")
 
+        # 10. Render Project Structure
+        self._render_project_structure(graph, self.output_dir / "project_structure.md")
+
     def _prune_stale_files(self, directory: Path, valid_filenames: set[str]) -> None:
         """Remove any markdown files in directory not present in valid_filenames."""
         if not directory.exists():
@@ -224,7 +227,7 @@ class ObsidianVaultRenderer:
             for r in routes:
                 r_fname = _safe_filename(r.name)
                 summary = f" — *{r.summary}*" if r.summary else ""
-                lines.append(f"- [[{r_fname}|`{r.name}`]]{summary}")
+                lines.append(f"- [[{r_fname}|{r.name}]]{summary}")
         else:
             lines.append("*Internal use case (invoked programmatically).*")
 
@@ -555,7 +558,7 @@ class ObsidianVaultRenderer:
         for r in d_routes:
             r_fname = _safe_filename(r.name)
             summary = f" — *{r.summary}*" if r.summary else ""
-            lines.append(f"- [[{r_fname}|`{r.name}`]]{summary}")
+            lines.append(f"- [[{r_fname}|{r.name}]]{summary}")
 
         lines.extend([
             "",
@@ -678,7 +681,23 @@ class ObsidianVaultRenderer:
             if comps["events"]:
                 stat_parts.append(f"{len(comps['events'])} events")
             stat_str = f" *({', '.join(stat_parts)})*" if stat_parts else ""
-            lines.append(f"- 🏰 [[{dom}|**{d_title}**]]{stat_str}")
+            lines.append(f"- 🏰 **[[{dom}|{d_title}]]**{stat_str}")
+
+        if graph.project_tree:
+            lines.extend([
+                "",
+                "---",
+                "",
+                "## 📁 Project Structure & Layout",
+                "",
+                "> Hierarchical directory layout and architectural layer mapping.",
+                "",
+                "- 📂 **[[project_structure|Detailed Codebase Directory Layout & Architectural Layers]]**",
+                "",
+                "```text",
+                graph.project_tree,
+                "```",
+            ])
 
         lines.extend([
             "",
@@ -690,7 +709,7 @@ class ObsidianVaultRenderer:
         for ep in graph.entrypoints:
             safe_fname = _safe_filename(ep.name)
             summary = f" — *{ep.summary}*" if ep.summary else ""
-            lines.append(f"- [[{safe_fname}|`{ep.name}`]]{summary}")
+            lines.append(f"- [[{safe_fname}|{ep.name}]]{summary}")
 
         lines.extend([
             "",
@@ -745,6 +764,61 @@ class ObsidianVaultRenderer:
             summary = f" — *{h.summary}*" if h.summary else ""
             lines.append(f"- [[{h.name}]]{badge}{summary}")
 
+        path.write_text("\n".join(lines), encoding="utf-8")
+
+
+
+    def _render_project_structure(self, graph: ArchitectureGraph, path: Path) -> None:
+        """Render standalone project file & directory structure note."""
+        lines = [
+            "---",
+            "type: project_structure",
+            "tags:",
+            "  - architecture/structure",
+            "---",
+            "",
+            f"# 📁 {graph.project_name.upper()} Codebase Structure",
+            "",
+            "> Complete directory hierarchy, source layout, and architectural layer responsibilities.",
+            "",
+            "## 🌳 Codebase Directory Tree",
+            "",
+            "```text",
+            graph.project_tree or "Directory tree not captured.",
+            "```",
+            "",
+            "---",
+            "",
+            "## 🏛️ Architectural Layer Mapping",
+            "",
+            "| Layer | Primary Path | Role & Conventions |",
+            "| :--- | :--- | :--- |",
+            "| **Ingress & API** | `src/application/api/` | REST API routes, schemas, controllers (FastAPI) |",
+            "| **Background Workers** | `src/application/background/` | Asynchronous tasks, brokers, schedulers (Taskiq) |",
+            "| **Event Handlers** | `src/application/events/` | Event listeners, Redis sliding-window batch buffers |",
+            "| **Domain Models** | `src/core/domain/` | Aggregates, Entities, Events, Value Objects |",
+            "| **Ports & Contracts** | `src/core/ports/` | Abstract repository and gateway interfaces |",
+            "| **Domain Services** | `src/core/services/` | Business rules and domain operations |",
+            "| **Use Cases** | `src/core/use_cases/` | Application orchestrators & UoW persistence |",
+            "| **Database Adapters** | `src/infrastructure/adapters/db/` | SQLAlchemy models, Repositories, Unit of Work |",
+            "| **Cache & Buffers** | `src/infrastructure/adapters/redis/` | Redis sliding-window event batching & cache |",
+            "| **Migrations** | `migrations/` | Alembic schema versioning and DDL migrations |",
+            "| **Test Suite** | `tests/` | Unit, integration, and architecture contract tests |",
+            "",
+            "---",
+            "",
+            "## 📚 Documentation Vault Sections",
+            "",
+            "- 🏠 [[index|Architecture Map of Content (MOC)]]",
+            "- 🏰 `domains/` — Bounded context overviews and interaction maps",
+            "- 🎬 `use_cases/` — Application workflows, call graphs, and persistence",
+            "- 🚀 `services/` — Domain services and business logic",
+            "- 💾 `datastore/` — Database tables, Redis keys, and ClickHouse logs",
+            "- 📦 `events/` — Pydantic event models and schemas",
+            "- 🎯 `handlers/` — Asynchronous event handlers and batch consumers",
+            "- 🌐 `entrypoints/` — Ingress HTTP routes and worker tasks",
+            "",
+        ]
         path.write_text("\n".join(lines), encoding="utf-8")
 
 

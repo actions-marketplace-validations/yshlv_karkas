@@ -30,6 +30,7 @@ def _build_sample_graph() -> ArchitectureGraph:
         entrypoint_type=EntrypointType.HTTP_ROUTE,
         domain="booking",
         target_use_case_ids=["use_case.booking.create_booking"],
+        target_service_ids=["service.BookingService"],  # Notice: passed via DI, but triggers UC
     )
     graph.entrypoints.append(ep)
 
@@ -112,3 +113,15 @@ def test_mermaid_overview_shows_bounded_contexts() -> None:
     assert "subgraph Contexts" in overview
     assert "subgraph Transport" in overview
     assert "Booking Context" in overview
+
+
+def test_mermaid_domain_diagram_no_redundant_bypass() -> None:
+    graph = _build_sample_graph()
+    dom_chart = generate_domain_diagram("booking", graph)
+
+    # Verify Route connects to Use Case
+    assert "route_booking_create --> use_case_booking_create_booking" in dom_chart
+    # Verify Use Case connects to Service
+    assert "use_case_booking_create_booking --> service_BookingService" in dom_chart
+    # Verify Route DOES NOT have redundant bypass line to Service!
+    assert "route_booking_create --> service_BookingService" not in dom_chart

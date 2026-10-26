@@ -521,6 +521,13 @@ class ArchitectureLinker:
         flows = self._build_process_flows(list(event_map.values()), list(service_map.values()), graph.edges)
         graph.flows = flows
 
+        # 11. Project File & Directory Structure Tree
+        try:
+            from karkas.extractors.project_tree import build_project_tree
+            graph.project_tree = build_project_tree(self.config.project_root)
+        except Exception:
+            graph.project_tree = ""
+
         # Normalize domains for all nodes
         for s in service_map.values():
             s.domain = normalize_domain_name(s.domain)

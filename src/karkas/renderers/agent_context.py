@@ -25,9 +25,21 @@ def render_agent_context_markdown(graph: ArchitectureGraph, output_file: str | P
         f"- **Event Handlers & Background Tasks:** {len(graph.handlers)}",
         f"- **Storage Entities & Tables:** {len(graph.storage_entities)}",
         "",
+    ]
+
+    if graph.project_tree:
+        lines.extend([
+            "### Codebase File & Directory Layout",
+            "```text",
+            graph.project_tree,
+            "```",
+            "",
+        ])
+
+    lines.extend([
         "## 2. API Entrypoints & Workflows (by Domain)",
         "",
-    ]
+    ])
 
     domains_with_eps: dict[str, list[EntrypointNode]] = {}
     for ep in graph.entrypoints:

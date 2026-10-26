@@ -224,6 +224,7 @@ class ArchitectureGraph(BaseModel):
     storage_entities: list[StorageEntityNode] = Field(default_factory=list)
     edges: list[ArchitectureEdge] = Field(default_factory=list)
     flows: list[ProcessFlow] = Field(default_factory=list)
+    project_tree: str = ""
 
     def find_event(self, event_id: str) -> DomainEventNode | None:
         """Find an event by its ID or simple name."""

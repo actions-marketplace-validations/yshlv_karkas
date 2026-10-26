@@ -15,6 +15,7 @@ from karkas.core.ir import (
     ChannelType,
     DomainEventNode,
     EdgeType,
+    EntrypointNode,
     ProcessFlow,
     UseCaseNode,
 )
@@ -174,27 +175,44 @@ def generate_use_case_flowchart(uc: UseCaseNode, graph: ArchitectureGraph) -> st
             lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {ev.name}\"]")
         lines.append("    end\n")
 
-    # Connect nodes
+    # Connect nodes accurately using real graph edges (no Cartesian product)
+    added_uc_edges: set[str] = set()
+
+    def add_uc_edge(src: str, dst: str, style: str = "-->", lbl: str = "") -> None:
+        key = f"{src}->{dst}"
+        if key not in added_uc_edges:
+            added_uc_edges.add(key)
+            if lbl:
+                lines.append(f"    {src} {style}|{lbl}| {dst}")
+            else:
+                lines.append(f"    {src} {style} {dst}")
+
     if routes:
         for r in routes:
-            lines.append(f"    {_node_safe_id(r.id)} -->|triggers| {uc_safe}")
+            add_uc_edge(_node_safe_id(r.id), uc_safe)
 
     if services:
         for sid in services:
-            lines.append(f"    {uc_safe} -->|orchestrates| {_node_safe_id(sid)}")
-            for st in writes:
-                lines.append(f"    {_node_safe_id(sid)} -.->|writes| {_node_safe_id(st.id)}")
-            for st in reads:
-                lines.append(f"    {_node_safe_id(sid)} -.->|reads| {_node_safe_id(st.id)}")
-            for ev in published_events:
-                lines.append(f"    {_node_safe_id(sid)} -->|publishes| {_node_safe_id(ev.id)}")
-    else:
-        for st in writes:
-            lines.append(f"    {uc_safe} -.->|persists via UoW| {_node_safe_id(st.id)}")
-        for st in reads:
-            lines.append(f"    {uc_safe} -.->|reads via UoW| {_node_safe_id(st.id)}")
-        for ev in published_events:
-            lines.append(f"    {uc_safe} -->|publishes| {_node_safe_id(ev.id)}")
+            add_uc_edge(uc_safe, _node_safe_id(sid))
+            # Connect only storage/events this specific service touches
+            for e in graph.edges:
+                if e.source_id == sid:
+                    if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in writes):
+                        add_uc_edge(_node_safe_id(sid), _node_safe_id(e.target_id), "-.->", "writes")
+                    elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in reads):
+                        add_uc_edge(_node_safe_id(sid), _node_safe_id(e.target_id), "-.->", "reads")
+                    elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in published_events):
+                        add_uc_edge(_node_safe_id(sid), _node_safe_id(e.target_id), "-->", "publishes")
+
+    # Direct operations by UseCase itself (without service)
+    for e in graph.edges:
+        if e.source_id == uc.id:
+            if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in writes):
+                add_uc_edge(uc_safe, _node_safe_id(e.target_id), "-.->", "persists")
+            elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in reads):
+                add_uc_edge(uc_safe, _node_safe_id(e.target_id), "-.->", "reads")
+            elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in published_events):
+                add_uc_edge(uc_safe, _node_safe_id(e.target_id), "-->", "publishes")
 
     lines.extend([
         "",
@@ -214,7 +232,7 @@ def generate_use_case_flowchart(uc: UseCaseNode, graph: ArchitectureGraph) -> st
 
 
 def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
-    """Generate end-to-end architecture diagram for a single bounded context."""
+    """Generate clean, untangled end-to-end architecture diagram for a single bounded context."""
     comps = graph.get_domain_components(domain)
     routes = comps["entrypoints"]
     use_cases = comps["use_cases"]
@@ -222,84 +240,139 @@ def generate_domain_diagram(domain: str, graph: ArchitectureGraph) -> str:
     storage = comps["storage"]
     events = comps["events"]
 
-    lines = [
-        "flowchart LR",
-    ]
+    # 1. Sort use cases in logical domain workflow order
+    def _uc_sort_key(u: UseCaseNode) -> tuple[int, str]:
+        name = u.name.lower()
+        if name.startswith(("create", "add", "register", "insert", "new")):
+            return (0, u.name)
+        if name.startswith(("get", "find", "fetch", "read", "view", "list")):
+            return (1, u.name)
+        if name.startswith(("update", "edit", "patch", "modify", "change")):
+            return (2, u.name)
+        if name.startswith(("delete", "remove", "destroy", "cancel")):
+            return (3, u.name)
+        return (4, u.name)
 
-    if routes:
-        lines.append("    subgraph Routes [\"🌐 API Endpoints\"]")
-        for r in routes[:10]:
-            lines.append(f"        {_node_safe_id(r.id)}[\"{_escape_mermaid(r.name)}\"]")
+    sorted_ucs = sorted(use_cases, key=_uc_sort_key)[:8]
+    uc_ids = {u.id for u in sorted_ucs}
+
+    # 2. Align routes opposite the use cases they trigger (prevents 'X' crossed lines!)
+    aligned_routes: list[EntrypointNode] = []
+    seen_route_ids: set[str] = set()
+    for u in sorted_ucs:
+        for r in routes:
+            if u.id in r.target_use_case_ids and r.id not in seen_route_ids:
+                aligned_routes.append(r)
+                seen_route_ids.add(r.id)
+
+    # Append remaining routes (e.g. direct query endpoints)
+    for r in routes:
+        if r.id not in seen_route_ids:
+            aligned_routes.append(r)
+            seen_route_ids.add(r.id)
+
+    aligned_routes = aligned_routes[:8]
+
+    # 3. Determine relevant services orchestrated by displayed use cases
+    rel_svc_ids: set[str] = set()
+    for u in sorted_ucs:
+        for e in graph.edges:
+            if e.source_id == u.id and e.edge_type == EdgeType.ORCHESTRATES:
+                rel_svc_ids.add(e.target_id)
+    for r in aligned_routes:
+        if not any(ucid in uc_ids for ucid in r.target_use_case_ids):
+            rel_svc_ids.update(r.target_service_ids)
+
+    disp_services = [s for s in services if s.id in rel_svc_ids][:4]
+    if not disp_services and services:
+        disp_services = services[:4]
+    disp_svc_ids = {s.id for s in disp_services}
+
+    disp_storage = storage[:4]
+    disp_events = events[:4]
+
+    lines = ["flowchart LR"]
+
+    if aligned_routes:
+        lines.append('    subgraph Ingress ["🌐 API Endpoints"]')
+        for r in aligned_routes:
+            lines.append(f'        {_node_safe_id(r.id)}["{_escape_mermaid(r.name)}"]')
         lines.append("    end\n")
 
-    if use_cases:
-        lines.append("    subgraph Workflows [\"🎬 Use Cases\"]")
-        for u in use_cases[:10]:
-            lines.append(f"        {_node_safe_id(u.id)}[\"{_escape_mermaid(u.name)}\"]")
+    if sorted_ucs:
+        lines.append('    subgraph Workflows ["🎬 Use Cases"]')
+        for u in sorted_ucs:
+            lines.append(f'        {_node_safe_id(u.id)}["{_escape_mermaid(u.name)}"]')
         lines.append("    end\n")
 
-    if services:
-        lines.append("    subgraph Svc [\"🚀 Domain Services\"]")
-        for s in services[:6]:
-            lines.append(f"        {_node_safe_id(s.id)}[\"{_escape_mermaid(s.name)}\"]")
+    if disp_services:
+        lines.append('    subgraph Svc ["🚀 Domain Services"]')
+        for s in disp_services:
+            lines.append(f'        {_node_safe_id(s.id)}["{_escape_mermaid(s.name)}"]')
         lines.append("    end\n")
 
-    if storage:
-        lines.append("    subgraph DB [\"💾 Storage & Tables\"]")
-        for st in storage[:8]:
-            lines.append(f"        {_node_safe_id(st.id)}[(\"{_escape_mermaid(st.name)}\")]")
+    if disp_storage:
+        lines.append('    subgraph DB ["💾 Storage & Tables"]')
+        for st in disp_storage:
+            lines.append(f'        {_node_safe_id(st.id)}[(\"{_escape_mermaid(st.name)}\")]')
         lines.append("    end\n")
 
-    if events:
-        lines.append("    subgraph Ev [\"📦 Domain Events\"]")
-        for ev in events[:8]:
-            lines.append(f"        {_node_safe_id(ev.id)}[\"📦 {_escape_mermaid(ev.name)}\"]")
+    if disp_events:
+        lines.append('    subgraph Ev ["📦 Domain Events"]')
+        for ev in disp_events:
+            lines.append(f'        {_node_safe_id(ev.id)}["📦 {_escape_mermaid(ev.name)}"]')
         lines.append("    end\n")
 
-    # Connect nodes via real graph edges
     added_edges: set[str] = set()
 
-    def add_edge(src: str, dst: str, lbl: str = "") -> None:
+    def add_edge(src: str, dst: str, style: str = "-->", lbl: str = "") -> None:
         key = f"{src}->{dst}"
         if key not in added_edges:
             added_edges.add(key)
             if lbl:
-                lines.append(f"    {src} -->|{lbl}| {dst}")
+                lines.append(f"    {src} {style}|{lbl}| {dst}")
             else:
-                lines.append(f"    {src} --> {dst}")
+                lines.append(f"    {src} {style} {dst}")
 
-    # 1. Routes -> Use Cases / Services
-    for r in routes[:10]:
+    # 1. Routes -> Use Cases (parallel horizontal lines; NO bypass to service if UC exists!)
+    for r in aligned_routes:
+        triggered_any_uc = False
         for ucid in r.target_use_case_ids:
-            if any(u.id == ucid for u in use_cases):
-                add_edge(_node_safe_id(r.id), _node_safe_id(ucid), "triggers")
-        for sid in r.target_service_ids:
-            if any(s.id == sid for s in services):
-                add_edge(_node_safe_id(r.id), _node_safe_id(sid), "calls")
+            if ucid in uc_ids:
+                add_edge(_node_safe_id(r.id), _node_safe_id(ucid))
+                triggered_any_uc = True
+        if not triggered_any_uc:
+            for sid in r.target_service_ids:
+                if sid in disp_svc_ids:
+                    add_edge(_node_safe_id(r.id), _node_safe_id(sid))
 
-    # 2. Use Cases -> Services, Storage, Events
-    for u in use_cases[:10]:
+    # 2. Use Cases -> Services
+    for u in sorted_ucs:
         for e in graph.edges:
-            if e.source_id == u.id:
-                if e.edge_type == EdgeType.ORCHESTRATES and any(s.id == e.target_id for s in services):
-                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "orchestrates")
-                elif e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage):
-                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "persists")
-                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in storage):
-                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "reads")
-                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events):
-                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "publishes")
+            if e.source_id == u.id and e.edge_type == EdgeType.ORCHESTRATES and e.target_id in disp_svc_ids:
+                add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id))
 
-    # 3. Services -> Storage, Events
-    for s in services[:6]:
+    # 3. Services -> Storage & Events
+    for s in disp_services:
         for e in graph.edges:
             if e.source_id == s.id:
-                if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in storage):
-                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "persists")
-                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in storage):
-                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "reads")
-                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in events):
-                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "publishes")
+                if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in disp_storage):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "-.->", "writes")
+                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in disp_storage):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "-.->", "reads")
+                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in disp_events):
+                    add_edge(_node_safe_id(s.id), _node_safe_id(e.target_id), "-->", "publishes")
+
+    # 4. Direct Use Case persistence/publishing if not routed through a service
+    for u in sorted_ucs:
+        for e in graph.edges:
+            if e.source_id == u.id:
+                if e.edge_type == EdgeType.WRITES_TO and any(st.id == e.target_id for st in disp_storage):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "-.->", "persists")
+                elif e.edge_type == EdgeType.READS_FROM and any(st.id == e.target_id for st in disp_storage):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "-.->", "reads")
+                elif e.edge_type == EdgeType.PUBLISHES and any(ev.id == e.target_id for ev in disp_events):
+                    add_edge(_node_safe_id(u.id), _node_safe_id(e.target_id), "-->", "publishes")
 
     lines.extend([
         "",
